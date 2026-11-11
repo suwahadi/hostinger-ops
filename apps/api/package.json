@@ -1,0 +1,19 @@
+{
+  "name": "@ops/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server.ts",
+    "start": "node dist/server.js"
+  },
+  "dependencies": {
+    "@ops/database": "workspace:*",
+    "@ops/shared": "workspace:*",
+    "fastify": "^5.12.0",
+    "zod": "^4.2.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.23.0"
+  }
+}
