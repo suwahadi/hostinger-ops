@@ -1,0 +1,12 @@
+node_modules
+dist
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+data/backups/*
+data/exports/*
+!data/backups/.gitkeep
+!data/exports/.gitkeep
+.claude/settings.local.json
+.superpowers

@@ -1,0 +1,14 @@
+{
+  "attribution": { "commit": "", "pr": "" },
+  "permissions": {
+    "deny": [
+      "Read(./.env)",
+      "Bash(pnpm ops:approve *)",
+      "Bash(pnpm ops:reject *)",
+      "Bash(pnpm ops:secret:*)",
+      "Bash(corepack pnpm ops:approve *)",
+      "Bash(corepack pnpm ops:reject *)",
+      "Bash(corepack pnpm ops:secret:*)"
+    ]
+  }
+}

@@ -1,0 +1,5 @@
+#!/bin/sh
+if grep -Eiq 'co-authored-by:.*(claude|anthropic|chatgpt|openai|copilot|gemini|cursor)|generated with' "$1"; then
+  echo "commit-msg: AI attribution is not allowed (AGENT.md §4)" >&2
+  exit 1
+fi
