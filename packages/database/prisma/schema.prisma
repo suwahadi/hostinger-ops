@@ -1,0 +1,362 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum SecretCategory {
+  API_TOKEN
+  DB_CREDENTIAL
+  SSH_CREDENTIAL
+  PROVIDER_KEY
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  CONSUMED
+}
+
+enum WebsiteType {
+  WORDPRESS
+  LARAVEL
+  CUSTOM_PHP
+  STATIC
+  UNKNOWN
+}
+
+enum AuditActor {
+  CLAUDE_MCP
+  CLI_HUMAN
+  WORKER
+}
+
+model HostingerLogin {
+  id             String              @id @default(uuid())
+  alias          String              @unique
+  tokenRef       String
+  status         String              @default("UNVERIFIED")
+  lastVerifiedAt DateTime?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  accounts       HostingAccount[]
+  capabilities   HostingCapability[]
+  domains        Domain[]
+  sourceWaves    MigrationWave[]     @relation("WaveSource")
+  targetWaves    MigrationWave[]     @relation("WaveTarget")
+
+  @@map("hostinger_logins")
+}
+
+model HostingCapability {
+  id         String         @id @default(uuid())
+  loginId    String
+  login      HostingerLogin @relation(fields: [loginId], references: [id], onDelete: Cascade)
+  name       String
+  available  Boolean
+  httpStatus Int?
+  note       String?
+  checkedAt  DateTime       @default(now())
+
+  @@unique([loginId, name])
+  @@map("hosting_capabilities")
+}
+
+model HostingAccount {
+  id           String         @id @default(uuid())
+  loginId      String
+  login        HostingerLogin @relation(fields: [loginId], references: [id], onDelete: Cascade)
+  code         String         @unique
+  orderId      String?
+  username     String?
+  planType     String?
+  datacenter   String?
+  sshHost      String?
+  sshPort      Int?
+  websiteCount Int?
+  websiteLimit Int?
+  diskUsedMb   Int?
+  diskLimitMb  Int?
+  lastSyncedAt DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  websites     Website[]
+
+  @@index([loginId])
+  @@map("hosting_accounts")
+}
+
+model Website {
+  id               String            @id @default(uuid())
+  accountId        String
+  account          HostingAccount    @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  domain           String
+  websiteType      WebsiteType       @default(UNKNOWN)
+  webRoot          String?
+  phpVersion       String?
+  metadata         Json?
+  status           String            @default("ACTIVE")
+  projectId        String?
+  project          Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  databases        WebsiteDatabase[]
+  migrationJobs    MigrationJob[]
+  monitoringChecks MonitoringCheck[]
+
+  @@unique([accountId, domain])
+  @@index([domain])
+  @@map("websites")
+}
+
+model WebsiteDatabase {
+  id            String   @id @default(uuid())
+  websiteId     String
+  website       Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  name          String
+  username      String?
+  credentialRef String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("website_databases")
+}
+
+model Domain {
+  id         String          @id @default(uuid())
+  name       String          @unique
+  loginId    String?
+  login      HostingerLogin? @relation(fields: [loginId], references: [id], onDelete: SetNull)
+  status     String?
+  expiresAt  DateTime?
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+  dnsRecords DnsRecord[]
+
+  @@map("domains")
+}
+
+model DnsRecord {
+  id       String   @id @default(uuid())
+  domainId String
+  domain   Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  name     String
+  type     String
+  content  String
+  ttl      Int?
+  priority Int?
+  syncedAt DateTime @default(now())
+
+  @@index([domainId, type])
+  @@map("dns_records")
+}
+
+model MigrationWave {
+  id               String         @id @default(uuid())
+  sourceLoginId    String
+  sourceLogin      HostingerLogin @relation("WaveSource", fields: [sourceLoginId], references: [id])
+  targetLoginId    String
+  targetLogin      HostingerLogin @relation("WaveTarget", fields: [targetLoginId], references: [id])
+  requestedDomains String[]
+  status           String         @default("DRAFT")
+  approvalId       String?
+  reportPath       String?
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  jobs             MigrationJob[]
+
+  @@map("migration_waves")
+}
+
+model MigrationJob {
+  id             String          @id @default(uuid())
+  waveId         String
+  wave           MigrationWave   @relation(fields: [waveId], references: [id], onDelete: Cascade)
+  websiteId      String?
+  website        Website?        @relation(fields: [websiteId], references: [id], onDelete: SetNull)
+  domain         String
+  classification String?
+  status         String          @default("PENDING")
+  dummyDomain    String?
+  backupPath     String?
+  stopReason     String?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  steps          MigrationStep[]
+  backups        Backup[]
+
+  @@unique([waveId, domain])
+  @@map("migration_jobs")
+}
+
+model MigrationStep {
+  id         String       @id @default(uuid())
+  jobId      String
+  job        MigrationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  name       String
+  status     String       @default("PENDING")
+  attempt    Int          @default(0)
+  startedAt  DateTime?
+  finishedAt DateTime?
+  summary    Json?
+  error      String?
+
+  @@unique([jobId, name])
+  @@map("migration_steps")
+}
+
+model Backup {
+  id          String        @id @default(uuid())
+  jobId       String?
+  job         MigrationJob? @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  filesPath   String?
+  dumpPath    String?
+  sizeBytes   BigInt?
+  sha256Files String?
+  sha256Dump  String?
+  manifest    Json?
+  createdAt   DateTime      @default(now())
+
+  @@map("backups")
+}
+
+model Approval {
+  id            String         @id
+  action        String
+  resourceId    String
+  payloadHash   String
+  impactSummary String
+  status        ApprovalStatus @default(PENDING)
+  expiresAt     DateTime
+  approvedBy    String?
+  reason        String?
+  decidedAt     DateTime?
+  consumedAt    DateTime?
+  createdAt     DateTime       @default(now())
+
+  @@index([status, expiresAt])
+  @@map("approvals")
+}
+
+model OperationLock {
+  id           String   @id @default(uuid())
+  resourceType String
+  resourceId   String
+  holder       String
+  acquiredAt   DateTime @default(now())
+  expiresAt    DateTime
+
+  @@unique([resourceType, resourceId])
+  @@map("operation_locks")
+}
+
+model SecretVault {
+  id          String         @id @default(uuid())
+  refKey      String         @unique
+  category    SecretCategory @default(API_TOKEN)
+  cipherText  String
+  iv          String
+  authTag     String
+  keyVersion  Int            @default(1)
+  description String?
+  lastUsedAt  DateTime?
+  rotatedAt   DateTime?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([category])
+  @@map("secret_vaults")
+}
+
+model AuditLog {
+  id         String     @id @default(uuid())
+  requestId  String
+  actor      AuditActor
+  action     String
+  resource   String
+  resourceId String?
+  result     String
+  detail     Json?
+  createdAt  DateTime   @default(now())
+
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Client {
+  id        String    @id @default(uuid())
+  code      String    @unique
+  name      String
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  projects  Project[]
+
+  @@map("clients")
+}
+
+model Project {
+  id        String          @id @default(uuid())
+  code      String          @unique
+  name      String
+  clientId  String?
+  client    Client?         @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+  websites  Website[]
+  rules     ProjectRule[]
+  knowledge KnowledgeItem[]
+
+  @@map("projects")
+}
+
+model ProjectRule {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  rule      String
+  createdAt DateTime @default(now())
+
+  @@map("project_rules")
+}
+
+model GlobalRule {
+  id        String   @id @default(uuid())
+  rule      String
+  createdAt DateTime @default(now())
+
+  @@map("global_rules")
+}
+
+model KnowledgeItem {
+  id        String   @id @default(uuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  kind      String
+  title     String
+  body      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("knowledge_items")
+}
+
+model MonitoringCheck {
+  id         String   @id @default(uuid())
+  websiteId  String
+  website    Website  @relation(fields: [websiteId], references: [id], onDelete: Cascade)
+  kind       String
+  ok         Boolean
+  httpStatus Int?
+  responseMs Int?
+  detail     Json?
+  checkedAt  DateTime @default(now())
+
+  @@index([websiteId, checkedAt])
+  @@map("monitoring_checks")
+}

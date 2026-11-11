@@ -1,0 +1,21 @@
+{
+  "name": "@ops/database",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" },
+    "./test-db": { "types": "./dist/test-db.d.ts", "default": "./dist/test-db.js" }
+  },
+  "scripts": {
+    "postinstall": "prisma generate",
+    "generate": "prisma generate",
+    "migrate": "prisma migrate deploy"
+  },
+  "dependencies": {
+    "@prisma/client": "~6.19.3"
+  },
+  "devDependencies": {
+    "prisma": "~6.19.3"
+  }
+}

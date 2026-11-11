@@ -1,0 +1,20 @@
+name: hostinger-ops
+services:
+  postgres:
+    image: postgres:17
+    container_name: ops-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hostinger_ops
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:${OPS_PG_PORT:-5432}:5432"
+    volumes:
+      - ops-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d hostinger_ops"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+volumes:
+  ops-postgres-data:
