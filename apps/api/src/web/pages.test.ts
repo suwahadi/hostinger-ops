@@ -184,3 +184,12 @@ test("app.css is served as text/css without a session", async () => {
   expect(res.statusCode).toBe(200);
   expect(res.headers["content-type"]).toContain("text/css");
 });
+
+test("ringkasan counts websites per expiring plan from website rows, like the totals", async () => {
+  expect(rowOf((await page("/ringkasan")).body, "1001")).toContain('class="num">3<');
+});
+
+test("favicon.ico answers 204 without a session so browsers log no error", async () => {
+  const res = await app.inject({ url: "/favicon.ico", headers: { host } });
+  expect(res.statusCode).toBe(204);
+});

@@ -10,3 +10,4 @@ data/exports/*
 !data/exports/.gitkeep
 .claude/settings.local.json
 .superpowers
+.playwright-mcp

@@ -28,7 +28,7 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest();
 
 const pathOf = (url: string) => url.split("?")[0]!;
 const isApiPath = (path: string) => path === "/health" || path === "/v1" || path.startsWith("/v1/");
-const isPublicWebPath = (path: string) => path === "/login" || path.startsWith("/assets/");
+const isPublicWebPath = (path: string) => path === "/login" || path === "/favicon.ico" || path.startsWith("/assets/");
 
 export function buildApp(deps: AppDeps): FastifyInstance {
   const { db, apiKey, masterKey, logger = false, fetch, limiter, sleep } = deps;
@@ -106,5 +106,6 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.register(webAuthRoutes({ db, sessions, throttle }));
   app.register(webPages(db));
   app.get("/assets/app.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(APP_CSS));
+  app.get("/favicon.ico", async (_request, reply) => reply.code(204).send());
   return app;
 }

@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@ops/database";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
-import { capacityReport, inventoryTotals, listPlans, type PlanRow, type PlanSort } from "../services/inventory-report.js";
+import { inventoryTotals, listPlans, type PlanRow, type PlanSort } from "../services/inventory-report.js";
 import { accessibleBy, loginSummaries } from "../services/summaries.js";
 import { daysUntil, formatCount, formatDate, formatDateTime, formatRelativeDays } from "./format.js";
 import { html, type SafeHtml } from "./html.js";
@@ -8,6 +8,7 @@ import { layout, type Section } from "./layout.js";
 
 const PAGE_SIZE = 50;
 const URGENT_DAYS = 7;
+const EXPIRING_WITHIN_MS = 30 * 24 * 60 * 60 * 1000;
 const WEBSITE_TYPES = ["WORDPRESS", "LARAVEL", "CUSTOM_PHP", "STATIC", "UNKNOWN"] as const;
 const WEBSITE_STATUSES = ["ACTIVE", "SUSPENDED", "UNKNOWN"] as const;
 const TYPE_LABELS: Record<string, string> = {
@@ -55,14 +56,17 @@ function planCodeCell(plan: { code: string; username: string | null }) {
 }
 
 async function ringkasan(db: PrismaClient) {
-  const [totals, report, logins] = await Promise.all([inventoryTotals(db), capacityReport(db), loginSummaries(db)]);
+  const [totals, { plans }, logins] = await Promise.all([inventoryTotals(db), listPlans(db, { sort: "habis" }), loginSummaries(db)]);
+  const deadline = Date.now() + EXPIRING_WITHIN_MS;
+  // Same counting rule as the totals above: website rows, not the count stored at sync time.
+  const expiringPlans = plans.filter((plan) => plan.expiresAt && new Date(plan.expiresAt).getTime() <= deadline);
   const stat = (key: keyof typeof totals, label: string) =>
     html`<div><dt>${label}</dt><dd data-stat="${key}">${totals[key]}</dd></div>`;
-  const expiring = report.expiringSoon.map(
+  const expiring = expiringPlans.map(
     (plan) =>
       html`<tr>${planCodeCell(plan)}<td>${plan.planType ?? "tidak diketahui"}</td><td>${plan.loginAlias}</td>${expiryCell(
         plan.expiresAt ? new Date(plan.expiresAt) : null,
-      )}<td${plan.autoRenew === false ? html` class="urgent"` : ""}>${autoRenewText(plan.autoRenew)}</td><td class="num">${plan.websiteCount ?? 0}</td></tr>`,
+      )}<td${plan.autoRenew === false ? html` class="urgent"` : ""}>${autoRenewText(plan.autoRenew)}</td><td class="num">${plan.websites}</td></tr>`,
   );
   const loginRows = logins.map(
     (login) =>
