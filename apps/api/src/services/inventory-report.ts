@@ -30,14 +30,45 @@ export async function inventoryTotals(db: PrismaClient): Promise<InventoryTotals
   return { logins, accounts, websites, wordpress };
 }
 
+async function websiteCounter(db: PrismaClient): Promise<(account: { id: string }) => number> {
+  const rows = await db.website.groupBy({ by: ["accountId"], where: { status: { not: "UNKNOWN" } }, _count: { _all: true } });
+  const byAccount = new Map(rows.map((row) => [row.accountId, row._count._all]));
+  return (account) => byAccount.get(account.id) ?? 0;
+}
+
+export type PlanRow = AccountSummary & { websites: number };
+export type PlanSort = "habis" | "website" | "kode";
+
+export async function listPlans(
+  db: PrismaClient,
+  opts: { login?: string; sort: PlanSort },
+): Promise<{ plans: PlanRow[]; unknownCount: number }> {
+  const [accounts, countOf] = await Promise.all([
+    db.hostingAccount.findMany({ where: opts.login ? accessibleBy(opts.login) : {}, include: accountInclude }),
+    websiteCounter(db),
+  ]);
+  const known = accounts.filter((a) => a.status !== "UNKNOWN");
+  const byExpiry = (a: (typeof known)[number], b: (typeof known)[number]) =>
+    (a.expiresAt?.getTime() ?? Infinity) - (b.expiresAt?.getTime() ?? Infinity) || a.code.localeCompare(b.code);
+  const sorted = [...known].sort(
+    opts.sort === "website"
+      ? (a, b) => countOf(a) - countOf(b) || a.code.localeCompare(b.code)
+      : opts.sort === "kode"
+        ? (a, b) => a.code.localeCompare(b.code)
+        : byExpiry,
+  );
+  return {
+    plans: sorted.map((a) => ({ ...toAccountSummary(a), websites: countOf(a) })),
+    unknownCount: accounts.length - known.length,
+  };
+}
+
 export async function capacityReport(db: PrismaClient, login?: string): Promise<CapacityReport> {
-  const [logins, allAccounts, websiteCounts] = await Promise.all([
+  const [logins, allAccounts, countOf] = await Promise.all([
     db.hostingerLogin.findMany({ where: login ? { alias: login } : {}, orderBy: { alias: "asc" } }),
     db.hostingAccount.findMany({ where: login ? accessibleBy(login) : {}, include: accountInclude }),
-    db.website.groupBy({ by: ["accountId"], where: { status: { not: "UNKNOWN" } }, _count: { _all: true } }),
+    websiteCounter(db),
   ]);
-  const websitesOf = new Map(websiteCounts.map((row) => [row.accountId, row._count._all]));
-  const countOf = (account: { id: string }) => websitesOf.get(account.id) ?? 0;
   const sumWebsites = (list: { id: string }[]) => list.reduce((sum, a) => sum + countOf(a), 0);
   const isKnown = (a: { status: string | null }) => a.status !== "UNKNOWN";
   const reachableFrom = (alias: string) => (a: (typeof allAccounts)[number]) =>

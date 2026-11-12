@@ -8,6 +8,8 @@ import { getUiCredential } from "./services/ui-password.js";
 import { verifyLogin } from "./services/verify-login.js";
 import { webAuthRoutes } from "./web/auth-routes.js";
 import { isAllowedHost, isSameOriginPost, readCookie, SECURITY_HEADERS, SESSION_COOKIE } from "./web/guard.js";
+import { errorPage, notFoundPage, webPages } from "./web/pages.js";
+import { APP_CSS } from "./web/styles.js";
 import { createLoginThrottle, createSessionStore, type LoginThrottle, type SessionStore } from "./web/session.js";
 
 export type AppDeps = {
@@ -73,11 +75,20 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     }
   });
 
+  const isWebRequest = (url: string) => !isApiPath(pathOf(url));
+
   app.setErrorHandler((error: { statusCode?: number }, request, reply) => {
     if (error.statusCode && error.statusCode < 500) return reply.code(error.statusCode).send({ error: "bad_request" });
     request.log.error(error);
+    if (isWebRequest(request.url)) return reply.code(500).type("text/html; charset=utf-8").send(errorPage());
     return reply.code(500).send({ error: "internal_error" });
   });
+
+  app.setNotFoundHandler((request, reply) =>
+    isWebRequest(request.url)
+      ? reply.code(404).type("text/html; charset=utf-8").send(notFoundPage())
+      : reply.code(404).send({ error: "not_found" }),
+  );
 
   app.get("/health", async () => {
     const database = await db.$queryRaw`SELECT 1`.then(
@@ -93,7 +104,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.register(inventoryRoutes(db, verify), { prefix: "/v1" });
   app.register(syncRoutes(db), { prefix: "/v1" });
   app.register(webAuthRoutes({ db, sessions, throttle }));
-  // shortcut: placeholder until the dashboard pages land in the next task of the web plan.
-  app.get("/ringkasan", async (_request, reply) => reply.type("text/html; charset=utf-8").send("<!doctype html><title>Ringkasan</title>"));
+  app.register(webPages(db));
+  app.get("/assets/app.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(APP_CSS));
   return app;
 }
