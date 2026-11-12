@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.20.0",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "infra:up": "docker compose --env-file .env -f infra/docker-compose.yml up -d --wait",
     "infra:down": "docker compose --env-file .env -f infra/docker-compose.yml down",
@@ -14,7 +16,8 @@
     "test": "tsc -b && vitest run",
     "dev:api": "corepack pnpm --filter @ops/api dev",
     "ops:secret:set": "node apps/api/dist/cli/secret-set.js",
-    "ops:login:add": "node apps/api/dist/cli/login-add.js"
+    "ops:login:add": "node apps/api/dist/cli/login-add.js",
+    "ops:ui:password": "node apps/api/dist/cli/ui-password.js"
   },
   "devDependencies": {
     "@types/node": "^22.12.0",

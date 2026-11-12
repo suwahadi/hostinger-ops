@@ -1,5 +1,8 @@
 {
-  "attribution": { "commit": "", "pr": "" },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
   "permissions": {
     "deny": [
       "Read(./.env)",
@@ -11,7 +14,9 @@
       "Bash(corepack pnpm ops:secret:*)",
       "Bash(pnpm ops:login:add *)",
       "Bash(corepack pnpm ops:login:add *)",
-      "Bash(node apps/api/dist/cli/*)"
+      "Bash(node apps/api/dist/cli/*)",
+      "Bash(pnpm ops:ui:*)",
+      "Bash(corepack pnpm ops:ui:*)"
     ]
   }
 }

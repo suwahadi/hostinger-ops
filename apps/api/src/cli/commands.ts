@@ -2,6 +2,7 @@ import { parseArgs } from "node:util";
 import type { PrismaClient } from "@ops/database";
 import { addLogin, assertNewAlias, defaultTokenRef } from "../services/logins.js";
 import { hasSecret, storeSecret } from "../services/secrets.js";
+import { setUiPassword } from "../services/ui-password.js";
 import { assertInteractive } from "./prompt.js";
 
 export type CliIo = {
@@ -31,4 +32,13 @@ export async function loginAddCommand(db: PrismaClient, masterKey: Buffer, io: C
   }
   await addLogin(db, { alias, tokenRef });
   return `${prefix}Login ${alias} added. Ask Claude to run verify_login_connection for ${alias}.`;
+}
+
+export async function uiPasswordCommand(db: PrismaClient, io: CliIo): Promise<string> {
+  assertInteractive(io.stdin);
+  const password = await io.readHidden("New web password: ");
+  const repeated = await io.readHidden("Repeat the password: ");
+  if (password !== repeated) throw new Error("Passwords do not match");
+  await setUiPassword(db, password);
+  return "Web password set. Open http://127.0.0.1:3000/ and log in.";
 }
