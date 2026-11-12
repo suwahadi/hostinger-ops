@@ -13,7 +13,7 @@ afterAll(() => db.$disconnect());
 const sumber = await db.hostingerLogin.create({ data: { alias: "sumber", tokenRef: "HOSTINGER_TOKEN_SUMBER" } });
 await db.secretVault.create({ data: { refKey: "HOSTINGER_TOKEN_SUMBER", ...encryptSecret(token, key) } });
 
-type Fixture = { orders: object[]; subscriptions: object[]; websites: object[] };
+type Fixture = { orders: object[]; subscriptions: object[]; websites: object[]; portfolio?: object[] };
 
 function hostinger(fixture: Fixture, failing?: { path: string; status: number }) {
   return vi.fn(async (input: string | URL | Request) => {
@@ -24,6 +24,7 @@ function hostinger(fixture: Fixture, failing?: { path: string; status: number })
       "/api/hosting/v1/orders": page(fixture.orders),
       "/api/hosting/v1/websites": page(fixture.websites),
       "/api/billing/v1/subscriptions": fixture.subscriptions,
+      ...(fixture.portfolio ? { "/api/domains/v1/portfolio": fixture.portfolio } : {}),
     };
     const body = bodies[pathname];
     return new Response(JSON.stringify(body ?? {}), { status: body === undefined ? 404 : 200 });
@@ -64,7 +65,7 @@ test("creates accounts with plan, expiry and username, and websites with WordPre
     ),
     job(),
   );
-  expect(result).toEqual({ accounts: 1, websites: 1, subscriptions: 1, markedUnknown: { accounts: 0, websites: 0 }, skippedWithoutDomain: 1 });
+  expect(result).toEqual({ accounts: 1, websites: 1, subscriptions: 1, markedUnknown: { accounts: 0, websites: 0 }, skippedWithoutDomain: 1, domains: null });
   expect(await db.hostingAccount.findUniqueOrThrow({ where: { code: "101" } })).toMatchObject({
     loginId: sumber.id,
     planType: "Premium",
@@ -167,7 +168,7 @@ test("every Hostinger call is audited as WORKER under the job id, without the to
   const j = job();
   await syncLoginInventory(deps(hostinger({ orders: [], subscriptions: [], websites: [] })), j);
   const audit = await db.auditLog.findMany({ where: { requestId: j.id } });
-  expect(audit.filter((a) => a.action === "HOSTINGER_API_CALL" && a.actor === "WORKER")).toHaveLength(3);
+  expect(audit.filter((a) => a.action === "HOSTINGER_API_CALL" && a.actor === "WORKER")).toHaveLength(4);
   expect(audit.find((a) => a.action === "SYNC_LOGIN")?.result).toBe("OK");
   expect(JSON.stringify(audit)).not.toContain(token);
 });
@@ -182,4 +183,41 @@ test("an existing mixed-case domain stays ACTIVE when Hostinger lists it in lowe
   expect(await db.website.findMany({ where: { domain: { equals: "campur.com", mode: "insensitive" } }, select: { status: true } })).toEqual([
     { status: "ACTIVE" },
   ]);
+});
+
+test("stores domain status and expiry from the portfolio", async () => {
+  const result = await syncLoginInventory(
+    deps(
+      hostinger({
+        orders: [{ id: 102, status: "active", plan: { name: "Business" } }],
+        subscriptions: [],
+        websites: [{ domain: "ganda.com", order_id: 102, is_enabled: true }],
+        portfolio: [
+          { id: 1, domain: "ganda.com", type: "domain", status: "active", expires_at: "2027-03-12T00:00:00Z" },
+          { id: 2, domain: null, type: "domain", status: "pending_setup" },
+        ],
+      }),
+    ),
+    job(),
+  );
+  expect(result.domains).toBe(1);
+  expect(await db.domain.findUniqueOrThrow({ where: { name: "ganda.com" } })).toMatchObject({
+    loginId: sumber.id,
+    status: "active",
+    expiresAt: new Date("2027-03-12T00:00:00Z"),
+  });
+});
+
+test("a failing domain list does not fail the inventory sync", async () => {
+  const result = await syncLoginInventory(
+    deps(
+      hostinger(
+        { orders: [{ id: 102, status: "active", plan: { name: "Business" } }], subscriptions: [], websites: [{ domain: "ganda.com", order_id: 102, is_enabled: true }] },
+        { path: "/api/domains/v1/portfolio", status: 403 },
+      ),
+    ),
+    job(),
+  );
+  expect(result).toMatchObject({ accounts: 1, websites: 1, domains: null });
+  expect((await db.domain.findUniqueOrThrow({ where: { name: "ganda.com" } })).expiresAt).toEqual(new Date("2027-03-12T00:00:00Z"));
 });

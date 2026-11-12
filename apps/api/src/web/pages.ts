@@ -277,6 +277,13 @@ async function websiteDetail(db: PrismaClient, domain: string) {
     orderBy: { createdAt: "asc" },
   });
   if (rows.length === 0) return null;
+  // A subdomain expires with the domain it belongs to, so every parent name is a candidate.
+  const labels = rows[0]!.domain.toLowerCase().split(".");
+  const candidates = labels.slice(0, -1).map((_, i) => labels.slice(i).join("."));
+  const registered = (await db.domain.findMany({ where: { name: { in: candidates } } })).sort((a, b) => b.name.length - a.name.length)[0];
+  const expires = registered?.expiresAt ?? null;
+  const expiry = expires ? `${formatDate(expires)} (${formatRelativeDays(expires)})` : "tidak diketahui";
+  const expiryClass = expires && daysUntil(expires) <= 30 ? "urgent" : "";
   return rows.map((w) => {
     const provider = ((w.metadata as { provider?: Record<string, unknown> } | null)?.provider ?? {}) as Record<string, unknown>;
     const field = (label: string, value: unknown, className = "") =>
@@ -291,6 +298,7 @@ ${field("Login pemilik", w.account.login.alias)}${field("Bisa diakses dari", w.a
 ${field("Folder web", w.webRoot, "path")}${field("Jenis vhost", provider.vhostType)}${field("Domain induk", provider.parentDomain)}
 ${field("Proyek", w.project ? `${w.project.code} (${w.project.name})` : "belum dipetakan")}
 ${field("Dicatat sejak", formatDateTime(w.createdAt))}${field("Diperbarui", formatDateTime(w.updatedAt))}
+${field("Domain expired", expiry, expiryClass)}
 </dl>`;
   });
 }

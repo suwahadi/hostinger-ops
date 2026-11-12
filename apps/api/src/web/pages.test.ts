@@ -272,3 +272,16 @@ test("the login page shows only Login Panel, without the product name", async ()
   expect(body).toContain("<title>Login Panel</title>");
   expect(body).not.toContain("Hostinger Ops");
 });
+
+test("website detail ends with the domain expiry, using the parent domain for subdomains", async () => {
+  await db.domain.create({ data: { name: "contoh.com", status: "active", expiresAt: new Date("2027-03-12T00:00:00Z") } });
+  const account = await db.hostingAccount.findUniqueOrThrow({ where: { code: "1001" } });
+  await db.website.create({ data: { accountId: account.id, domain: "blog.contoh.com" } });
+  for (const url of ["/website/contoh.com", "/website/blog.contoh.com"]) {
+    const body = (await page(url)).body;
+    const tail = body.slice(body.lastIndexOf("<dt>"));
+    expect(tail).toContain("Domain expired");
+    expect(tail).toContain("12 Mar 2027");
+  }
+  expect((await page("/website/under_score.com")).body).toContain("Domain expired</dt><dd>tidak diketahui");
+});

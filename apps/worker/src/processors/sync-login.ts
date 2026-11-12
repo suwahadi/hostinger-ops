@@ -20,11 +20,13 @@ export type SyncResult = {
   subscriptions: number;
   markedUnknown: { accounts: number; websites: number };
   skippedWithoutDomain: number;
+  domains: number | null;
 };
 
 const ORDERS = "/api/hosting/v1/orders";
 const SUBSCRIPTIONS = "/api/billing/v1/subscriptions";
 const WEBSITES = "/api/hosting/v1/websites";
+const PORTFOLIO = "/api/domains/v1/portfolio";
 
 const Order = z.object({
   id: z.number(),
@@ -48,6 +50,11 @@ const Website = z.object({
   parent_domain: z.string().nullish(),
 });
 type Website = z.infer<typeof Website>;
+const PortfolioDomain = z.object({
+  domain: z.string().nullish(),
+  status: z.string().nullish(),
+  expires_at: z.string().nullish(),
+});
 
 function parseItems<T>(schema: z.ZodType<T>, items: unknown[], path: string): T[] {
   const parsed = z.array(schema).safeParse(items);
@@ -98,6 +105,14 @@ export async function syncLoginInventory(deps: SyncDeps, job: JobRow): Promise<S
   const orders = parseItems(Order, await getAllPages(client, ORDERS), ORDERS);
   const subscriptions = parseItems(Subscription, await getList(client, SUBSCRIPTIONS), SUBSCRIPTIONS);
   const websites = parseItems(Website, await getAllPages(client, WEBSITES), WEBSITES);
+  // Domain expiry is extra information: a login without access to its domain list must still get its inventory.
+  let portfolio: z.infer<typeof PortfolioDomain>[] | null = null;
+  try {
+    portfolio = parseItems(PortfolioDomain, await getList(client, PORTFOLIO), PORTFOLIO);
+  } catch (error) {
+    if (!(error instanceof HostingerRequestError)) throw error;
+  }
+  const registered = (portfolio ?? []).filter((d): d is typeof d & { domain: string } => Boolean(d.domain));
 
   const byDomain = new Map<string, Website>();
   let skippedWithoutDomain = 0;
@@ -205,6 +220,15 @@ export async function syncLoginInventory(deps: SyncDeps, job: JobRow): Promise<S
         where: { accountId: { in: accountIds }, id: { notIn: seenIds }, status: { not: "UNKNOWN" } },
         data: { status: "UNKNOWN" },
       });
+      for (const entry of registered) {
+        const data = {
+          loginId: login.id,
+          status: entry.status ?? null,
+          expiresAt: entry.expires_at ? new Date(entry.expires_at) : null,
+        };
+        const name = entry.domain.toLowerCase();
+        await tx.domain.upsert({ where: { name }, create: { name, ...data }, update: data });
+      }
       await tx.hostingerLogin.update({ where: { id: login.id }, data: { lastSyncedAt: now } });
 
       return {
@@ -213,6 +237,7 @@ export async function syncLoginInventory(deps: SyncDeps, job: JobRow): Promise<S
         subscriptions: subscriptions.length,
         markedUnknown: { accounts: markedAccounts.count, websites: markedWebsites.count + orphanWebsites.count },
         skippedWithoutDomain,
+        domains: portfolio ? registered.length : null,
       };
     },
     { timeout: 60_000 },
