@@ -318,3 +318,20 @@ test("type logos carry only plain shapes: no script, event handler, link or inli
     expect([...logo.matchAll(/<([a-z]+)/g)].every(([, tag]) => ["svg", "title", "g", "path", "rect"].includes(tag!))).toBe(true);
   }
 });
+
+test("website detail ends with a Kembali button under the box that goes back, or to /website when opened directly", async () => {
+  const body = (await page("/website/contoh.com")).body;
+  const after = body.slice(body.lastIndexOf("</dl>"));
+  expect(after).toMatch(/<a class="back-link" href="\/website" data-back><svg class="icon"[\s\S]*?<span>Kembali<\/span><\/a>/);
+  const script = (await app.inject({ url: "/assets/app.js", headers: { host } })).body;
+  expect(script).toContain("a[data-back]");
+  expect(script).toContain("history.back()");
+  expect(script).toContain("document.referrer");
+});
+
+test("the login form locks itself and shows the loader while the password is checked", async () => {
+  const form = (await app.inject({ url: "/login", headers: { host } })).body;
+  expect(form).toContain('<script src="/assets/app.js" defer></script>');
+  expect(form).toMatch(/<form method="post" action="\/login" class="login-form" data-busy="[^"]+">/);
+  expect(form).toMatch(/<div class="busy" role="status" aria-live="polite" hidden>[\s\S]*class="spinner"/);
+});

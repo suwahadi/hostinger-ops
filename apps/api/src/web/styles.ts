@@ -95,6 +95,9 @@ a.page:hover { border-color: var(--pine); color: var(--pine); }
 .domain-title { display: flex; align-items: center; gap: 0.5rem; overflow-wrap: anywhere; }
 a.external { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border-radius: 6px; color: var(--pine); }
 a.external:hover { background: var(--pine-soft); }
+.back-row { margin: 1rem 0 0; }
+.back-link { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 44px; padding: 0 1rem 0 0.65rem; border: 1px solid var(--pine); border-radius: 6px; background: var(--surface); color: var(--pine); text-decoration: none; }
+.back-link:hover { background: var(--pine-soft); }
 
 dl.detail { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.4rem 1.25rem; margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.25rem; }
 dl.detail dt { color: var(--muted); }

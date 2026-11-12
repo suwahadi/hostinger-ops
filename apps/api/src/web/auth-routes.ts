@@ -2,6 +2,7 @@ import type { PrismaClient } from "@ops/database";
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from "fastify";
 import { getUiCredential, verifyPassword } from "../services/ui-password.js";
 import { readCookie, SESSION_COOKIE } from "./guard.js";
+import { BUSY_OVERLAY } from "./layout.js";
 import type { LoginThrottle, SessionStore } from "./session.js";
 
 export type WebAuthDeps = { db: PrismaClient; sessions: SessionStore; throttle: LoginThrottle };
@@ -21,7 +22,7 @@ export function loginPage(state: LoginState): string {
   const formHtml =
     state === "setup"
       ? ""
-      : `<form method="post" action="/login" class="login-form">
+      : `<form method="post" action="/login" class="login-form" data-busy="Memeriksa password…">
   <label for="password">Password</label>
   <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
   <button type="submit">Masuk</button>
@@ -29,8 +30,9 @@ export function loginPage(state: LoginState): string {
   return `<!doctype html>
 <html lang="id">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Login Panel</title><link rel="stylesheet" href="/assets/app.css"></head>
-<body class="login-page"><main class="login-card"><h1>Login Panel</h1>${message}${formHtml}</main></body>
+<title>Login Panel</title><link rel="stylesheet" href="/assets/app.css"><script src="/assets/app.js" defer></script></head>
+<body class="login-page"><main class="login-card"><h1>Login Panel</h1>${message}${formHtml}</main>
+${BUSY_OVERLAY}</body>
 </html>`;
 }
 

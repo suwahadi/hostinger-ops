@@ -40,6 +40,15 @@ export const APP_JS = `(() => {
     }, 0);
   });
 
+  // Back returns to the list the owner came from (keeping its search and page); opened directly, the link's own
+  // href is followed instead, so it never leaves the dashboard.
+  document.addEventListener("click", (event) => {
+    const link = event.target instanceof Element ? event.target.closest("a[data-back]") : null;
+    if (!link || history.length < 2 || !document.referrer.startsWith(location.origin + "/")) return;
+    event.preventDefault();
+    history.back();
+  });
+
   // Coming back with the browser's Back button restores the page from cache with the overlay still showing.
   window.addEventListener("pageshow", (event) => {
     if (event.persisted) reset();

@@ -405,7 +405,8 @@ export function webPages(db: PrismaClient): FastifyPluginAsync {
           404,
         );
       }
-      return render(reply, { title: "Detail website", active: "website", query: request.query, body: html`${details}` });
+      const back = html`<p class="back-row"><a class="back-link" href="/website" data-back>${icon("chevron-left")}<span>Kembali</span></a></p>`;
+      return render(reply, { title: "Detail website", active: "website", query: request.query, body: html`${details}${back}` });
     });
     app.get<{ Querystring: Query }>("/sinkron", async (request, reply) =>
       render(reply, { title: "Sinkron & Audit", active: "sinkron", query: request.query, body: await sinkron(db, request.query) }),

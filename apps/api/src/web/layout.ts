@@ -1,5 +1,9 @@
-import { html, type SafeHtml } from "./html.js";
+import { html, SafeHtml } from "./html.js";
 import { icon, type IconName } from "./icons.js";
+
+export const BUSY_OVERLAY = `<div class="busy" role="status" aria-live="polite" hidden>
+<div class="busy-card"><span class="spinner" aria-hidden="true"></span><p class="busy-text">Memproses…</p><p class="busy-note">Mohon tunggu. Halaman diperbarui otomatis setelah selesai.</p></div>
+</div>`;
 
 export type Section = "ringkasan" | "paket" | "website" | "sinkron";
 
@@ -38,9 +42,7 @@ ${opts.message ? html`<p class="notice" role="status">${opts.message}</p>` : ""}
 ${opts.body}
 </main>
 </div>
-<div class="busy" role="status" aria-live="polite" hidden>
-<div class="busy-card"><span class="spinner" aria-hidden="true"></span><p class="busy-text">Memproses…</p><p class="busy-note">Mohon tunggu. Halaman diperbarui otomatis setelah selesai.</p></div>
-</div>
+${new SafeHtml(BUSY_OVERLAY)}
 </body>
 </html>`.value
   }`;
