@@ -21,7 +21,9 @@ export async function enqueueJob(
   const existing = await findActive();
   if (existing) return { id: existing.id, status: existing.status, created: false };
   try {
-    const job = await db.job.create({ data: { kind: input.kind, payload: input.payload, dedupeKey: input.dedupeKey } });
+    const job = await db.job.create({
+      data: { kind: input.kind, payload: input.payload, dedupeKey: input.dedupeKey, runAfter: new Date() },
+    });
     return { id: job.id, status: job.status, created: true };
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
@@ -33,14 +35,16 @@ export async function enqueueJob(
 }
 
 export async function claimNextJob(db: PrismaClient): Promise<JobRow | null> {
-  // Prisma stores timestamps as UTC without a zone, so "now" is compared in UTC as well.
+  // runAfter is written with this process's clock, so it is compared with the same clock: the Docker database clock
+  // drifts seconds away from Windows. The ISO string is cast to a zone-less UTC timestamp, the column's format.
+  const now = new Date().toISOString();
   const rows = await db.$queryRaw<JobRow[]>`
     UPDATE "jobs"
     SET "status" = 'RUNNING', "attempts" = "attempts" + 1,
-        "startedAt" = (now() AT TIME ZONE 'UTC'), "updatedAt" = (now() AT TIME ZONE 'UTC')
+        "startedAt" = ${now}::timestamp, "updatedAt" = ${now}::timestamp
     WHERE "id" = (
       SELECT "id" FROM "jobs"
-      WHERE "status" = 'QUEUED' AND "runAfter" <= (now() AT TIME ZONE 'UTC')
+      WHERE "status" = 'QUEUED' AND "runAfter" <= ${now}::timestamp
       ORDER BY "createdAt"
       FOR UPDATE SKIP LOCKED
       LIMIT 1
