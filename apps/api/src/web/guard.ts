@@ -42,8 +42,15 @@ export function isSameOriginPost(headers: IncomingHttpHeaders): boolean {
 }
 
 export function safeReturnPath(value: unknown): string {
-  if (typeof value !== "string" || !value.startsWith("/")) return "/ringkasan";
-  // Browsers read "//host" and "/\host" as another site.
-  if (value.startsWith("//") || value.startsWith("/\\") || /[\u0000-\u001f]/.test(value)) return "/ringkasan";
-  return value;
+  const fallback = "/ringkasan";
+  if (typeof value !== "string" || !value.startsWith("/") || /[\u0000-\u001f\\]/.test(value)) return fallback;
+  let url: URL;
+  try {
+    url = new URL(value, "http://local");
+  } catch {
+    return fallback;
+  }
+  // Checked after normalizing: "/.//evil.com" becomes "//evil.com", which browsers read as another site.
+  if (url.origin !== "http://local" || url.pathname.startsWith("//")) return fallback;
+  return `${url.pathname}${url.search}`;
 }

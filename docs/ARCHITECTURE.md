@@ -1,11 +1,29 @@
-# Arsitektur (keadaan M3)
+# Arsitektur (keadaan M3 + tampilan web)
 
 ```text
 Claude Code ──stdio──▶ apps/mcp-server ──HTTP + x-api-key──▶ apps/api (+ worker) ──Prisma──▶ PostgreSQL 17 (Docker)
                         8 tool               127.0.0.1:3000        │                       127.0.0.1:${OPS_PG_PORT}
+Browser pemilik ──HTTP + cookie sesi─────────▶ (halaman web) ──────┤
                                                                    └──HTTPS + Bearer──▶ developers.hostinger.com
-Terminal pemilik ──ops:secret:set / ops:login:add──▶ apps/api/dist/cli ──▶ PostgreSQL (vault terenkripsi)
+Terminal pemilik ──ops:secret:set / ops:login:add / ops:ui:password──▶ apps/api/dist/cli ──▶ PostgreSQL
 ```
+
+**Dua pintu di satu port.** Hook `onRequest` di `apps/api/src/app.ts` memilih pintu dari route yang dicocokkan router (`request.routeOptions.url`), bukan dari URL mentah:
+- `/v1/*` hanya terbuka dengan `x-api-key` (jalur Claude); cookie diabaikan.
+- Halaman web hanya terbuka dengan sesi browser; `x-api-key` diabaikan.
+- `/health`, `/login`, `/assets/app.css`, dan `/favicon.ico` publik.
+
+**Tampilan web** (`apps/api/src/web/`): Ringkasan, Paket, Website (+ detail), dan Sinkron & Audit, dirender di server tanpa JavaScript. Ada dua tombol yang hanya membaca dari Hostinger: Sinkronkan dan Uji koneksi. Angka di Ringkasan dan `/v1/capacity` memakai satu aturan hitung di `services/inventory-report.ts`: paket dan website `UNKNOWN` tidak dihitung, dan website dihitung dari barisnya.
+
+## Membuka tampilan web
+
+```powershell
+corepack pnpm build
+corepack pnpm ops:ui:password   # sekali; di terminal sendiri, minimal 12 karakter
+corepack pnpm dev:api           # biarkan berjalan
+```
+
+Lalu buka `http://127.0.0.1:3000/` (atau `http://localhost:3000/`). Sesi berakhir setelah 8 jam tidak aktif, saat API dinyalakan ulang, atau saat password diganti.
 
 **Satu proses.** `corepack pnpm dev:api` menjalankan API dan loop worker sekaligus (keputusan pemilik, 12 Nov 2026). Akibatnya satu pembatas laju 90/menit per login berlaku untuk semua panggilan Hostinger. Antrean disimpan di tabel `jobs` PostgreSQL: job yang terputus karena PC tidur atau restart kembali ke `QUEUED` saat API menyala lagi.
 
@@ -21,7 +39,7 @@ Sebuah paket baru menjadi `UNKNOWN` bila tidak ada lagi login yang bisa melihatn
 | `packages/database` | Skema Prisma lengkap (PRD §7.1), migrasi, `createDb`, `createTestDb` |
 | `packages/hostinger-adapter` | Client Hostinger dengan pembatas 90/menit per login dan penanganan 429, penyedia token dari vault, 4 probe baca-saja, paginasi (`getAllPages`, `getList`) |
 | `apps/worker` | Antrean `jobs` (dedupe, retry, pemulihan job terputus), loop worker, prosesor `sync-login` |
-| `apps/api` | Fastify + worker. `/health` tanpa kunci; dengan kunci internal: `/v1/logins`, `/v1/accounts`, `/v1/websites`, `/v1/websites/:domain`, `/v1/capacity`, `/v1/logins/:alias/capabilities`, `POST /v1/logins/:alias/verify`, `POST /v1/sync`. CLI pemilik di `src/cli` |
+| `apps/api` | Fastify + worker. `/health` tanpa kunci; dengan kunci internal: `/v1/logins`, `/v1/accounts`, `/v1/websites`, `/v1/websites/:domain`, `/v1/capacity`, `/v1/logins/:alias/capabilities`, `POST /v1/logins/:alias/verify`, `POST /v1/sync`. Halaman web di `src/web`, CLI pemilik di `src/cli` |
 | `apps/mcp-server` | `list_logins`, `list_accounts`, `list_websites`, `get_login_capabilities`, `verify_login_connection`, `trigger_inventory_sync`, `get_website_details`, `get_capacity_report`; hanya memanggil API lokal |
 
 Belum ada: adapter SSH, migrasi, perintah approval (M4), memori proyek (M5).

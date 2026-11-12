@@ -6,7 +6,7 @@ import { inventoryRoutes } from "./routes/inventory.js";
 import { syncRoutes } from "./routes/sync.js";
 import { getUiCredential } from "./services/ui-password.js";
 import { verifyLogin } from "./services/verify-login.js";
-import { webAuthRoutes } from "./web/auth-routes.js";
+import { sessionEndedPage, webAuthRoutes } from "./web/auth-routes.js";
 import { isAllowedHost, isSameOriginPost, readCookie, SECURITY_HEADERS, SESSION_COOKIE } from "./web/guard.js";
 import { webActions } from "./web/actions.js";
 import { errorPage, notFoundPage, webPages } from "./web/pages.js";
@@ -29,7 +29,9 @@ const sha256 = (value: string) => createHash("sha256").update(value).digest();
 
 const pathOf = (url: string) => url.split("?")[0]!;
 const isApiPath = (path: string) => path === "/health" || path === "/v1" || path.startsWith("/v1/");
-const isPublicWebPath = (path: string) => path === "/login" || path === "/favicon.ico" || path.startsWith("/assets/");
+// /logout is public so "Keluar" still works after the session is gone (e.g. the API restarted).
+const isPublicWebPath = (path: string) =>
+  path === "/login" || path === "/logout" || path === "/favicon.ico" || path.startsWith("/assets/");
 
 export function buildApp(deps: AppDeps): FastifyInstance {
   const { db, apiKey, masterKey, logger = false, fetch, limiter, sleep } = deps;
@@ -72,7 +74,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     if (!session || !credential || session.createdAt <= credential.updatedAt.getTime()) {
       if (token) sessions.destroy(token);
       if (request.method === "GET") return reply.redirect("/login", 302);
-      return reply.code(401).type("text/plain").send("Unauthorized");
+      return reply.code(401).type("text/html; charset=utf-8").send(sessionEndedPage());
     }
   });
 

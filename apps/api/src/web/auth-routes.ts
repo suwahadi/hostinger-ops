@@ -34,6 +34,17 @@ export function loginPage(state: LoginState): string {
 </html>`;
 }
 
+export function sessionEndedPage(): string {
+  return `<!doctype html>
+<html lang="id">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sesi berakhir · Hostinger Ops</title><link rel="stylesheet" href="/assets/app.css"></head>
+<body class="login-page"><main class="login-card"><h1>Sesi berakhir</h1>
+<p>Aksi tadi tidak dijalankan karena sesi Anda sudah berakhir, misalnya karena API dinyalakan ulang atau 8 jam tidak aktif.</p>
+<p><a href="/login">Masuk lagi</a></p></main></body>
+</html>`;
+}
+
 export function webAuthRoutes({ db, sessions, throttle }: WebAuthDeps): FastifyPluginAsync {
   return async (app) => {
     const audit = (request: FastifyRequest, result: string) =>

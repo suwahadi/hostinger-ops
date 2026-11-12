@@ -24,8 +24,13 @@ Untuk agent berikutnya. Baca ini dulu, lalu `PRD.md` dan `AGENT.md`.
   - order `UNLISTED` dan `root_directory` kosong menimpa `webRoot` dengan null;
   - kegagalan daftar billing menggagalkan seluruh sinkronisasi;
   - pesan "unexpected response shape" tidak menyebut field;
-  - `POST /v1/sync` dan sinkronisasi yang gagal tidak menulis baris audit;
+  - sinkronisasi yang gagal tidak menulis baris audit (`POST /v1/sync` sekarang menulis `SYNC_REQUEST`);
   - beberapa jalur belum dites (balapan P2002, pemulihan saat worker mulai, gagal halaman 2 di level prosesor).
+- **Tampilan web selesai** (di luar PRD §2.2, diminta pemilik 12 Nov 2026):
+  - spec `docs/superpowers/specs/2026-11-12-web-dashboard-design.md`, rencana `docs/superpowers/plans/2026-11-12-web-dashboard.md`;
+  - `http://127.0.0.1:3000/`, login password (`ops:ui:password`), halaman Ringkasan, Paket, Website, dan Sinkron & Audit, dua tombol baca-saja;
+  - diuji di browser lewat pratinjau database test. Pemilik belum membuat password atau membukanya dengan data asli (Tugas 7 rencana itu).
+- **GitHub:** `origin` = `https://github.com/suwahadi/hostinger-ops.git`, branch `main` saja, identitas `suwahadi <suwahadi@gmail.com>`, tanpa atribusi AI. Push setelah setiap revisi yang lolos pemeriksaan (AGENT.md §4).
 - **Berikutnya: M4** (migrasi WordPress; mulai dari M4a, pembuktian perilaku API di akun pilot). Belum ada rencananya. Jangan mulai sebelum pemilik menyuruh.
 
 ## Yang sudah ada
@@ -36,12 +41,12 @@ Untuk agent berikutnya. Baca ini dulu, lalu `PRD.md` dan `AGENT.md`.
 | `packages/database` | Skema Prisma lengkap PRD §7.1, migrasi `20261111000000_init` (termasuk trigger hanya-tambah `audit_logs`), `createDb`, `createTestDb` |
 | `packages/hostinger-adapter` | Client Hostinger (Bearer, 30 detik, 90/menit per login, 429 + `Retry-After` maks 60 detik, 3 percobaan), penyedia token dari vault, 4 probe baca-saja, paginasi |
 | `apps/worker` | Antrean `jobs` di PostgreSQL, loop worker (berjalan di proses API), prosesor `sync-login` |
-| `apps/api` | Fastify `127.0.0.1:3000` + worker, kunci internal `x-api-key`; route inventaris, detail website, kapasitas, verifikasi, sinkronisasi |
-| `apps/api/src/cli` | `ops:secret:set <NAME>` dan `ops:login:add <alias>`; menolak stdin non-interaktif; dijalankan dari `apps/api/dist` (perlu `corepack pnpm build`) |
+| `apps/api` | Fastify `127.0.0.1:3000` + worker, kunci internal `x-api-key`; route inventaris, detail website, kapasitas, verifikasi, sinkronisasi; halaman web di `src/web` (sesi cookie, terpisah dari `/v1`) |
+| `apps/api/src/cli` | `ops:secret:set <NAME>`, `ops:login:add <alias>`, `ops:ui:password`; menolak stdin non-interaktif; dijalankan dari `apps/api/dist` (perlu `corepack pnpm build`) |
 | `apps/mcp-server` | 8 tool: `list_logins`, `list_accounts`, `list_websites`, `get_login_capabilities`, `verify_login_connection`, `trigger_inventory_sync`, `get_website_details`, `get_capacity_report`; `.mcp.json` di root |
 | `infra/docker-compose.yml` | Hanya PostgreSQL 17; container `ops-postgres` berjalan di `127.0.0.1:5433` |
 | `docs/` | `ARCHITECTURE.md`, `SECURITY.md`, `API-CAPABILITIES.md` |
-| Test | 138 test; `corepack pnpm typecheck && corepack pnpm test && corepack pnpm build` lolos |
+| Test | 194 test; `corepack pnpm typecheck && corepack pnpm test && corepack pnpm build` lolos |
 
 Belum ada: `ssh-adapter`, migrasi, `ops:approve`/`ops:reject`, memori proyek, kelima `SKILL.md`.
 

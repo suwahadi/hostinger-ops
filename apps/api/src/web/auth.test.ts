@@ -181,3 +181,28 @@ test("an Origin on another port or scheme of the same host is 403", async () => 
   expect((await postLogin(app, password, { host: "127.0.0.1:3000", origin: "https://127.0.0.1:3000" })).statusCode).toBe(403);
   expect((await postLogin(app, password, { host: "localhost:3000", origin: "http://localhost" })).statusCode).toBe(403);
 });
+
+test("after the API restarts, a button press gets a page with a link to /login", async () => {
+  const stale = `ops_session=${"b".repeat(64)}`;
+  const res = await app.inject({ method: "POST", url: "/aksi/sinkron", headers: { ...form, ...sameOrigin, cookie: stale }, payload: "" });
+  expect(res.statusCode).toBe(401);
+  expect(String(res.headers["content-type"])).toContain("text/html");
+  expect(res.body).toContain('href="/login"');
+});
+
+test("Keluar works even when the session is already gone", async () => {
+  const stale = `ops_session=${"c".repeat(64)}`;
+  const res = await app.inject({ method: "POST", url: "/logout", headers: { ...form, ...sameOrigin, cookie: stale }, payload: "" });
+  expect(res.statusCode).toBe(303);
+  expect(res.headers.location).toBe("/login");
+  expect(String(res.headers["set-cookie"])).toContain("Max-Age=0");
+});
+
+test("safeReturnPath rejects paths that normalize to another site", () => {
+  for (const bad of ["/.//evil.com", "/a/..//evil.com", "/%2e//evil.com", "/./\evil.com"]) {
+    const target = safeReturnPath(bad);
+    expect(target.startsWith("//")).toBe(false);
+    expect(new URL(target, "http://127.0.0.1:3000").origin).toBe("http://127.0.0.1:3000");
+  }
+  expect(safeReturnPath("/paket/../website?q=a")).toBe("/website?q=a");
+});

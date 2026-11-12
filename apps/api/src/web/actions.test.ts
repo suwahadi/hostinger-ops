@@ -82,3 +82,11 @@ test("the message is shown on the page it returns to", async () => {
   expect(page.body).toContain('role="status"');
   expect(page.body).toContain("Sinkronisasi untuk sumber");
 });
+
+test("a return path that normalizes to another site never leaves the dashboard", async () => {
+  for (const kembali of ["/.//evil.com", "/a/..//evil.com", "/%2e//evil.com"]) {
+    const location = String((await post("/aksi/sinkron", { kembali })).headers.location);
+    expect(location.startsWith("//")).toBe(false);
+    expect(new URL(location, `http://${host}`).origin).toBe(`http://${host}`);
+  }
+});
