@@ -219,3 +219,42 @@ test("paket search finds plans by part of the username or order code", async () 
   expect(rowCount((await page("/paket?cari=1002")).body, "plan")).toBe(1);
   expect(rowCount((await page("/paket?cari=%25")).body, "plan")).toBe(0);
 });
+
+test("website pagination shows numbered pages with previous and next", async () => {
+  const body = (await page("/website?q=situs&hal=2")).body;
+  expect(body).toContain('aria-current="page"');
+  expect(body).toMatch(/href="[^"]*hal=1"[^>]*>1</);
+  expect(body).toContain('aria-label="Halaman sebelumnya"');
+  expect(body).toContain('aria-label="Halaman berikutnya"');
+});
+
+test("website detail links the domain in a new tab, only for a real hostname", async () => {
+  const body = (await page("/website/contoh.com")).body;
+  expect(body).toContain('href="https://contoh.com"');
+  expect(body).toContain('target="_blank"');
+  expect(body).toContain('rel="noopener noreferrer"');
+  const odd = (await page(`/website/${encodeURIComponent("x<script>alert(1)</script>.com")}`)).body;
+  expect(odd).not.toContain('target="_blank"');
+});
+
+test("pages load the busy script and action forms opt in to the loader", async () => {
+  const body = (await page("/ringkasan")).body;
+  expect(body).toContain('<script src="/assets/app.js" defer></script>');
+  expect(body).toContain('class="busy"');
+  expect(body).toMatch(/<form[^>]*action="\/aksi\/sinkron"[^>]*data-busy="[^"]+"/);
+  const script = await app.inject({ url: "/assets/app.js", headers: { host } });
+  expect(script.statusCode).toBe(200);
+  expect(String(script.headers["content-type"])).toContain("javascript");
+});
+
+test("the sidebar shows an icon next to every menu item", async () => {
+  const body = (await page("/paket")).body;
+  const nav = body.slice(body.indexOf('<nav class="side"'), body.indexOf("</nav>"));
+  expect(nav.split('<svg class="icon"').length - 1).toBe(5);
+  expect(nav).toContain('aria-hidden="true"');
+});
+
+test("the login page is titled Login Panel", async () => {
+  const res = await app.inject({ url: "/login", headers: { host } });
+  expect(res.body).toContain("<h1>Login Panel</h1>");
+});

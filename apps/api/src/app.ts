@@ -10,6 +10,7 @@ import { sessionEndedPage, webAuthRoutes } from "./web/auth-routes.js";
 import { isAllowedHost, isSameOriginPost, readCookie, SECURITY_HEADERS, SESSION_COOKIE } from "./web/guard.js";
 import { webActions } from "./web/actions.js";
 import { errorPage, notFoundPage, webPages } from "./web/pages.js";
+import { APP_JS } from "./web/script.js";
 import { APP_CSS } from "./web/styles.js";
 import { createLoginThrottle, createSessionStore, type LoginThrottle, type SessionStore } from "./web/session.js";
 
@@ -112,6 +113,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
     verifyLogin({ db, masterKey, limiter: hostingerLimiter, fetch, sleep, requestId, actor: "WEB_HUMAN" }, alias);
   app.register(webActions({ db, verify: webVerify }));
   app.get("/assets/app.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(APP_CSS));
+  app.get("/assets/app.js", async (_request, reply) => reply.type("text/javascript; charset=utf-8").send(APP_JS));
   app.get("/favicon.ico", async (_request, reply) => reply.code(204).send());
   return app;
 }

@@ -5,9 +5,13 @@ import { escapeLike } from "../services/like.js";
 import { accessibleBy, accountInclude, loginSummaries, toAccountSummary } from "../services/summaries.js";
 import { daysUntil, formatCount, formatDate, formatDateTime, formatRelativeDays } from "./format.js";
 import { html, type SafeHtml } from "./html.js";
+import { icon } from "./icons.js";
 import { layout, type Section } from "./layout.js";
+import { pager } from "./pager.js";
 
 const PAGE_SIZE = 50;
+// Only a plain hostname becomes a link; anything else from the provider stays text.
+const HOSTNAME = /^(?=.{1,253}$)[a-z0-9-]+(.[a-z0-9-]+)+$/i;
 const URGENT_DAYS = 7;
 const EXPIRING_WITHIN_MS = 30 * 24 * 60 * 60 * 1000;
 const WEBSITE_TYPES = ["WORDPRESS", "LARAVEL", "CUSTOM_PHP", "STATIC", "UNKNOWN"] as const;
@@ -53,7 +57,8 @@ function table(head: SafeHtml, rows: SafeHtml[], caption: string) {
 }
 
 function actionButton(action: string, login: string, label: string, variant = "") {
-  return html`<form method="post" action="${action}" class="inline-form"><input type="hidden" name="login" value="${login}"><input type="hidden" name="kembali" value="/ringkasan"><button type="submit"${
+  const busy = action === "/aksi/uji" ? `Menguji koneksi ${login} ke Hostinger…` : `Menyinkronkan ${login} dengan Hostinger…`;
+  return html`<form method="post" action="${action}" class="inline-form" data-busy="${busy}"><input type="hidden" name="login" value="${login}"><input type="hidden" name="kembali" value="/ringkasan"><button type="submit"${
     variant ? html` class="${variant}"` : ""
   } aria-label="${label} ${login}">${label}</button></form>`;
 }
@@ -115,7 +120,7 @@ ${
 }
 <h2>Login Hostinger</h2>
 <p class="lead">Kedua tombol hanya membaca dari Hostinger; tidak ada yang diubah di sana.</p>
-<form method="post" action="/aksi/sinkron" class="actions"><input type="hidden" name="kembali" value="/ringkasan"><button type="submit">Sinkronkan semua login</button></form>
+<form method="post" action="/aksi/sinkron" class="toolbar" data-busy="Menyinkronkan semua login dengan Hostinger…"><input type="hidden" name="kembali" value="/ringkasan"><button type="submit">${icon("sinkron")}<span>Sinkronkan semua login</span></button></form>
 ${
   loginRows.length
     ? table(
@@ -219,9 +224,7 @@ ${table(
   body,
   "Website",
 )}
-<nav class="pager" aria-label="Halaman">${hal > 1 ? html`<a href="${linkTo(hal - 1)}">Halaman sebelumnya</a>` : ""}${
-            hal < lastPage ? html`<a href="${linkTo(hal + 1)}">Halaman berikutnya</a>` : ""
-          }</nav>`;
+${pager(hal, lastPage, linkTo)}`;
   return html`
 <form class="filters" method="get" action="/website">
 <label>Cari domain<input type="search" name="q" value="${q}" placeholder="sebagian nama domain"></label>
@@ -270,7 +273,10 @@ async function websiteDetail(db: PrismaClient, domain: string) {
     const provider = ((w.metadata as { provider?: Record<string, unknown> } | null)?.provider ?? {}) as Record<string, unknown>;
     const field = (label: string, value: unknown, className = "") =>
       html`<dt>${label}</dt><dd${className ? html` class="${className}"` : ""}>${value === null || value === undefined || value === "" ? "tidak diketahui" : String(value)}</dd>`;
-    return html`<h2>${w.domain}</h2><dl class="detail">
+    const external = HOSTNAME.test(w.domain)
+      ? html` <a class="external" href="https://${w.domain}" target="_blank" rel="noopener noreferrer" aria-label="Buka ${w.domain} di tab baru" title="Buka di tab baru">${icon("external")}</a>`
+      : "";
+    return html`<h2 class="domain-title">${w.domain}${external}</h2><dl class="detail">
 ${field("Status", w.status)}${field("Jenis", TYPE_LABELS[w.websiteType] ?? w.websiteType)}${field("Jenis di Hostinger", provider.websiteType)}
 ${field("Kode order", w.account.code, "code")}${field("Paket", w.account.planType)}${field("Username", w.account.username, "code")}
 ${field("Login pemilik", w.account.login.alias)}${field("Bisa diakses dari", w.account.access.map((a) => a.login.alias).join(", "))}

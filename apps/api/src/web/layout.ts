@@ -1,4 +1,5 @@
 import { html, type SafeHtml } from "./html.js";
+import { icon, type IconName } from "./icons.js";
 
 export type Section = "ringkasan" | "paket" | "website" | "sinkron";
 
@@ -12,7 +13,7 @@ const NAV: [Section, string, string][] = [
 export function layout(opts: { title: string; active?: Section; message?: string; body: SafeHtml }): string {
   const items = NAV.map(
     ([key, href, label]) =>
-      html`<li><a href="${href}"${key === opts.active ? html` aria-current="page"` : ""}>${label}</a></li>`,
+      html`<li><a href="${href}"${key === opts.active ? html` aria-current="page"` : ""}>${icon(key as IconName)}<span>${label}</span></a></li>`,
   );
   return `<!doctype html>\n${
     html`<html lang="id">
@@ -21,6 +22,7 @@ export function layout(opts: { title: string; active?: Section; message?: string
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${opts.title} · Hostinger Ops</title>
 <link rel="stylesheet" href="/assets/app.css">
+<script src="/assets/app.js" defer></script>
 </head>
 <body>
 <a class="skip" href="#isi">Langsung ke isi</a>
@@ -28,13 +30,16 @@ export function layout(opts: { title: string; active?: Section; message?: string
 <nav class="side" aria-label="Menu utama">
 <p class="brand">Hostinger Ops</p>
 <ul>${items}</ul>
-<form method="post" action="/logout" class="logout"><button type="submit" class="link-button">Keluar</button></form>
+<form method="post" action="/logout" class="logout"><button type="submit" class="link-button">${icon("keluar")}<span>Keluar</span></button></form>
 </nav>
 <main id="isi" tabindex="-1">
 <h1>${opts.title}</h1>
 ${opts.message ? html`<p class="notice" role="status">${opts.message}</p>` : ""}
 ${opts.body}
 </main>
+</div>
+<div class="busy" role="status" aria-live="polite" hidden>
+<div class="busy-card"><span class="spinner" aria-hidden="true"></span><p class="busy-text">Memproses…</p><p class="busy-note">Mohon tunggu. Halaman diperbarui otomatis setelah selesai.</p></div>
 </div>
 </body>
 </html>`.value
