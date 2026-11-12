@@ -286,7 +286,7 @@ test("website detail ends with the domain expiry, using the parent domain for su
   expect((await page("/website/under_score.com")).body).toContain("Domain expired</dt><dd>tidak diketahui");
 });
 
-test("website type is shown as a coloured logo only, named for screen readers; types without a logo stay text", async () => {
+test("website type is shown as a coloured logo only, named for screen readers; unrecognised types get the Chrome mark", async () => {
   const account = await db.hostingAccount.findUniqueOrThrow({ where: { code: "1001" } });
   await db.website.createMany({
     data: [
@@ -303,8 +303,8 @@ test("website type is shown as a coloured logo only, named for screen readers; t
     expect(cell(list, domain!)).toContain(`<svg class="type-logo" viewBox=`);
     expect(cell(list, domain!)).toContain(`role="img" aria-label="${name}"`);
   }
-  expect(cell(list, "jenis-lain.com")).not.toContain("<svg");
-  expect(cell(list, "jenis-lain.com")).toContain("Belum dikenali");
+  expect(cell(list, "jenis-lain.com")).toContain(`<svg class="type-logo" viewBox="0 0 63 63"`);
+  expect(cell(list, "jenis-lain.com")).toContain(`role="img" aria-label="Belum dikenali"`);
   const detail = (await page("/website/contoh.com")).body;
   expect(detail).toMatch(/<dt>Jenis<\/dt><dd><svg class="type-logo"[^>]*aria-label="WordPress"/);
 });
