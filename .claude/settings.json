@@ -8,7 +8,10 @@
       "Bash(pnpm ops:secret:*)",
       "Bash(corepack pnpm ops:approve *)",
       "Bash(corepack pnpm ops:reject *)",
-      "Bash(corepack pnpm ops:secret:*)"
+      "Bash(corepack pnpm ops:secret:*)",
+      "Bash(pnpm ops:login:add *)",
+      "Bash(corepack pnpm ops:login:add *)",
+      "Bash(node apps/api/dist/cli/*)"
     ]
   }
 }

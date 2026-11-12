@@ -12,7 +12,9 @@
     "typecheck": "tsc -b",
     "build": "tsc -b",
     "test": "tsc -b && vitest run",
-    "dev:api": "corepack pnpm --filter @ops/api dev"
+    "dev:api": "corepack pnpm --filter @ops/api dev",
+    "ops:secret:set": "node apps/api/dist/cli/secret-set.js",
+    "ops:login:add": "node apps/api/dist/cli/login-add.js"
   },
   "devDependencies": {
     "@types/node": "^22.12.0",
