@@ -76,6 +76,9 @@ button:hover { background: #184a3b; }
 button.secondary:hover { background: var(--pine-soft); }
 button:disabled { opacity: 0.6; cursor: progress; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 0.5rem; margin: 0.25rem 0 1rem; }
+td:has(> .actions) { width: 1%; white-space: nowrap; }
+td:has(> .actions) .actions { flex-wrap: nowrap; }
+table[aria-label="Login Hostinger"] :is(td:nth-child(3), td:nth-child(4)) { white-space: nowrap; }
 button.secondary { background: var(--surface); color: var(--pine); }
 button.link-button { display: flex; align-items: center; gap: 0.65rem; background: none; border: 0; color: var(--muted); padding: 0 0.75rem; text-align: left; width: 100%; border-radius: 6px; }
 button.link-button:hover { background: var(--paper); }
@@ -98,10 +101,9 @@ dl.detail dd { margin: 0; overflow-wrap: anywhere; }
 
 .login-page { display: grid; place-items: center; min-height: 100vh; padding: 1rem; }
 .login-card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 2rem; width: min(24rem, 100%); }
-.login-card h1 { margin-bottom: 0.25rem; text-align: center; }
-.login-product { margin: 0 0 1.25rem; text-align: center; color: var(--muted); }
+.login-card h1 { margin-bottom: 1.25rem; text-align: center; }
 .login-form { display: flex; flex-direction: column; gap: 0.5rem; }
-.login-form button { margin-top: 0.75rem; }
+.login-form button { margin-top: 0.75rem; justify-content: center; }
 
 .busy { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 1rem; background: rgba(28, 36, 48, 0.45); }
 .busy[hidden] { display: none; }

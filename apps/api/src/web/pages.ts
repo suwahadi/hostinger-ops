@@ -11,7 +11,15 @@ import { pager } from "./pager.js";
 
 const PAGE_SIZE = 50;
 // Only a plain hostname becomes a link; anything else from the provider stays text.
-const HOSTNAME = /^(?=.{1,253}$)[a-z0-9-]+(.[a-z0-9-]+)+$/i;
+const HOSTNAME_LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/i;
+
+function isPlainHostname(domain: string): boolean {
+  const labels = domain.split(".");
+  if (domain.length > 253 || labels.length < 2 || !labels.every((label) => HOSTNAME_LABEL.test(label))) return false;
+  // Belt and braces: the browser's own parser must read the same host back, with nothing after it.
+  const url = new URL(`https://${domain}`);
+  return url.hostname === domain.toLowerCase() && url.pathname === "/" && !url.username && !url.password;
+}
 const URGENT_DAYS = 7;
 const EXPIRING_WITHIN_MS = 30 * 24 * 60 * 60 * 1000;
 const WEBSITE_TYPES = ["WORDPRESS", "LARAVEL", "CUSTOM_PHP", "STATIC", "UNKNOWN"] as const;
@@ -273,7 +281,7 @@ async function websiteDetail(db: PrismaClient, domain: string) {
     const provider = ((w.metadata as { provider?: Record<string, unknown> } | null)?.provider ?? {}) as Record<string, unknown>;
     const field = (label: string, value: unknown, className = "") =>
       html`<dt>${label}</dt><dd${className ? html` class="${className}"` : ""}>${value === null || value === undefined || value === "" ? "tidak diketahui" : String(value)}</dd>`;
-    const external = HOSTNAME.test(w.domain)
+    const external = isPlainHostname(w.domain)
       ? html` <a class="external" href="https://${w.domain}" target="_blank" rel="noopener noreferrer" aria-label="Buka ${w.domain} di tab baru" title="Buka di tab baru">${icon("external")}</a>`
       : "";
     return html`<h2 class="domain-title">${w.domain}${external}</h2><dl class="detail">

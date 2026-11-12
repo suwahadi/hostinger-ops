@@ -258,3 +258,17 @@ test("the login page is titled Login Panel", async () => {
   const res = await app.inject({ url: "/login", headers: { host } });
   expect(res.body).toContain("<h1>Login Panel</h1>");
 });
+
+test("the external link is offered only for a plain hostname, never one that points elsewhere", async () => {
+  const account = await db.hostingAccount.findUniqueOrThrow({ where: { code: "1002" } });
+  for (const domain of ["x@evil.com", "a/b.com", "a:b.com"]) {
+    await db.website.create({ data: { accountId: account.id, domain } });
+    expect((await page(`/website/${encodeURIComponent(domain)}`)).body).not.toContain('target="_blank"');
+  }
+});
+
+test("the login page shows only Login Panel, without the product name", async () => {
+  const body = (await app.inject({ url: "/login", headers: { host } })).body;
+  expect(body).toContain("<title>Login Panel</title>");
+  expect(body).not.toContain("Hostinger Ops");
+});

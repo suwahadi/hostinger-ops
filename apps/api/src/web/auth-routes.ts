@@ -29,8 +29,8 @@ export function loginPage(state: LoginState): string {
   return `<!doctype html>
 <html lang="id">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Masuk · Hostinger Ops</title><link rel="stylesheet" href="/assets/app.css"></head>
-<body class="login-page"><main class="login-card"><h1>Login Panel</h1><p class="login-product">Hostinger Ops</p>${message}${formHtml}</main></body>
+<title>Login Panel</title><link rel="stylesheet" href="/assets/app.css"></head>
+<body class="login-page"><main class="login-card"><h1>Login Panel</h1>${message}${formHtml}</main></body>
 </html>`;
 }
 
