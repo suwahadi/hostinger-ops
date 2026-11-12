@@ -30,6 +30,10 @@ Untuk agent berikutnya. Baca ini dulu, lalu `PRD.md` dan `AGENT.md`.
   - spec `docs/superpowers/specs/2026-11-12-web-dashboard-design.md`, rencana `docs/superpowers/plans/2026-11-12-web-dashboard.md`;
   - `http://127.0.0.1:3000/`, login password (`ops:ui:password`), halaman Ringkasan, Paket, Website, dan Sinkron & Audit, dua tombol baca-saja;
   - diuji di browser lewat pratinjau database test. Pemilik belum membuat password atau membukanya dengan data asli (Tugas 7 rencana itu).
+- **Tambahan tampilan web (12 Nov 2026, permintaan pemilik):** pagination bernomor, tautan eksternal di detail website (hanya untuk hostname yang wajar), loader dan kunci tombol saat aksi (satu skrip kecil `/assets/app.js`; tanpa skrip form tetap jalan), ikon sidebar, halaman login berjudul "Login Panel", username paket bisa diklik ke daftar websitenya, pencarian username atau kode order.
+- **Tanggal kedaluwarsa domain:** sinkronisasi membaca `GET /api/domains/v1/portfolio` per login ke tabel `domains`; kegagalan daftar domain tidak menggagalkan sinkronisasi. Detail website menampilkan "Domain expired" dari domain itu atau domain induknya.
+- **Login ketiga `backupdata`** ditambahkan pemilik: CONNECTED; `dns.zone.read` ditolak 403 untuk token ini (perlu diperhatikan untuk DNS di M4). Setelah sinkronisasi: 3 login, 631 domain (583 dengan tanggal kedaluwarsa).
+- Batas waktu test dinaikkan (`testTimeout` 20 detik, `hookTimeout` 120 detik) karena PC ini sering kekurangan memori dan test bisa gagal acak di batas 5 detik.
 - **GitHub:** `origin` = `https://github.com/suwahadi/hostinger-ops.git`, branch `main` saja, identitas `suwahadi <suwahadi@gmail.com>`, tanpa atribusi AI. Push setelah setiap revisi yang lolos pemeriksaan (AGENT.md §4).
 - **Berikutnya: M4** (migrasi WordPress; mulai dari M4a, pembuktian perilaku API di akun pilot). Belum ada rencananya. Jangan mulai sebelum pemilik menyuruh.
 
