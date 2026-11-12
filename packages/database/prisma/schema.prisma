@@ -42,6 +42,7 @@ model HostingerLogin {
   tokenRef       String
   status         String              @default("UNVERIFIED")
   lastVerifiedAt DateTime?
+  lastSyncedAt   DateTime?
   createdAt      DateTime            @default(now())
   updatedAt      DateTime            @updatedAt
   accounts       HostingAccount[]
@@ -68,24 +69,28 @@ model HostingCapability {
 }
 
 model HostingAccount {
-  id           String         @id @default(uuid())
-  loginId      String
-  login        HostingerLogin @relation(fields: [loginId], references: [id], onDelete: Cascade)
-  code         String         @unique
-  orderId      String?
-  username     String?
-  planType     String?
-  datacenter   String?
-  sshHost      String?
-  sshPort      Int?
-  websiteCount Int?
-  websiteLimit Int?
-  diskUsedMb   Int?
-  diskLimitMb  Int?
-  lastSyncedAt DateTime?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  websites     Website[]
+  id             String         @id @default(uuid())
+  loginId        String
+  login          HostingerLogin @relation(fields: [loginId], references: [id], onDelete: Cascade)
+  code           String         @unique
+  orderId        String?
+  username       String?
+  planType       String?
+  datacenter     String?
+  sshHost        String?
+  sshPort        Int?
+  websiteCount   Int?
+  websiteLimit   Int?
+  diskUsedMb     Int?
+  diskLimitMb    Int?
+  status         String?
+  subscriptionId String?
+  expiresAt      DateTime?
+  autoRenew      Boolean?
+  lastSyncedAt   DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  websites       Website[]
 
   @@index([loginId])
   @@map("hosting_accounts")
@@ -241,6 +246,27 @@ model Approval {
 
   @@index([status, expiresAt])
   @@map("approvals")
+}
+
+model Job {
+  id          String    @id @default(uuid())
+  kind        String
+  payload     Json
+  dedupeKey   String?
+  status      String    @default("QUEUED")
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  runAfter    DateTime  @default(now())
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  result      Json?
+  error       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAfter])
+  @@index([dedupeKey])
+  @@map("jobs")
 }
 
 model OperationLock {

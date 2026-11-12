@@ -24,3 +24,10 @@ test("secret vault refKey is unique", async () => {
   await db.secretVault.create({ data });
   await expect(db.secretVault.create({ data })).rejects.toThrow();
 });
+
+test("only one active job per dedupe key", async () => {
+  await db.job.create({ data: { kind: "sync-login", payload: {}, dedupeKey: "sync-login:x" } });
+  await expect(db.job.create({ data: { kind: "sync-login", payload: {}, dedupeKey: "sync-login:x" } })).rejects.toThrow();
+  await db.job.updateMany({ where: { dedupeKey: "sync-login:x" }, data: { status: "DONE" } });
+  await expect(db.job.create({ data: { kind: "sync-login", payload: {}, dedupeKey: "sync-login:x" } })).resolves.toBeTruthy();
+});
