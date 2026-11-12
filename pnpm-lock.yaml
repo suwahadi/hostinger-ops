@@ -49,6 +49,21 @@ importers:
         specifier: ^4.2.0
         version: 4.6.7
 
+  apps/worker:
+    dependencies:
+      '@ops/database':
+        specifier: workspace:*
+        version: link:../../packages/database
+      '@ops/hostinger-adapter':
+        specifier: workspace:*
+        version: link:../../packages/hostinger-adapter
+      '@ops/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      zod:
+        specifier: ^4.2.0
+        version: 4.6.7
+
   packages/database:
     dependencies:
       '@prisma/client':

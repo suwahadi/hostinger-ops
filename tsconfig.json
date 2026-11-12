@@ -15,6 +15,9 @@
     },
     {
       "path": "apps/mcp-server"
+    },
+    {
+      "path": "apps/worker"
     }
   ]
 }
