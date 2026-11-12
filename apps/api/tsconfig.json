@@ -3,5 +3,9 @@
   "compilerOptions": { "outDir": "dist", "rootDir": "src" },
   "include": ["src"],
   "exclude": ["src/**/*.test.ts"],
-  "references": [{ "path": "../../packages/shared" }, { "path": "../../packages/database" }]
+  "references": [
+    { "path": "../../packages/shared" },
+    { "path": "../../packages/database" },
+    { "path": "../../packages/hostinger-adapter" }
+  ]
 }

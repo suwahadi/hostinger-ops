@@ -23,6 +23,9 @@ importers:
       '@ops/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@ops/hostinger-adapter':
+        specifier: workspace:*
+        version: link:../../packages/hostinger-adapter
       '@ops/shared':
         specifier: workspace:*
         version: link:../../packages/shared

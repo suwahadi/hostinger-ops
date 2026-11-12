@@ -1,15 +1,26 @@
-import { createHash, timingSafeEqual } from "node:crypto";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@ops/database";
+import { createRateLimiter, HOSTINGER_RATE_LIMIT, type RateLimiter, type Sleep } from "@ops/hostinger-adapter";
 import { fastify, type FastifyInstance } from "fastify";
 import { inventoryRoutes } from "./routes/inventory.js";
+import { verifyLogin } from "./services/verify-login.js";
 
-export type AppDeps = { db: PrismaClient; apiKey: string; logger?: boolean };
+export type AppDeps = {
+  db: PrismaClient;
+  apiKey: string;
+  masterKey: Buffer;
+  logger?: boolean;
+  fetch?: typeof fetch;
+  limiter?: RateLimiter;
+  sleep?: Sleep;
+};
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest();
 
-export function buildApp({ db, apiKey, logger = false }: AppDeps): FastifyInstance {
-  const app = fastify({ logger });
+export function buildApp({ db, apiKey, masterKey, logger = false, fetch, limiter, sleep }: AppDeps): FastifyInstance {
+  const app = fastify({ logger, genReqId: () => randomUUID() });
   const expectedKey = sha256(apiKey);
+  const hostingerLimiter = limiter ?? createRateLimiter(HOSTINGER_RATE_LIMIT);
 
   app.addHook("onRequest", async (request, reply) => {
     if (request.url === "/health") return;
@@ -34,6 +45,9 @@ export function buildApp({ db, apiKey, logger = false }: AppDeps): FastifyInstan
     return { status: "ok", database };
   });
 
-  app.register(inventoryRoutes(db), { prefix: "/v1" });
+  const verify = (alias: string, requestId: string) =>
+    verifyLogin({ db, masterKey, limiter: hostingerLimiter, fetch, sleep, requestId }, alias);
+
+  app.register(inventoryRoutes(db, verify), { prefix: "/v1" });
   return app;
 }
