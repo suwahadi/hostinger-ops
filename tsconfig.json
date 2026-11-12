@@ -1,9 +1,20 @@
 {
   "files": [],
   "references": [
-    { "path": "packages/shared" },
-    { "path": "packages/database" },
-    { "path": "apps/api" },
-    { "path": "apps/mcp-server" }
+    {
+      "path": "packages/shared"
+    },
+    {
+      "path": "packages/database"
+    },
+    {
+      "path": "packages/hostinger-adapter"
+    },
+    {
+      "path": "apps/api"
+    },
+    {
+      "path": "apps/mcp-server"
+    }
   ]
 }
