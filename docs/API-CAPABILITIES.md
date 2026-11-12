@@ -15,12 +15,30 @@ Dua login pilot (A dan B), paket shared hosting. Semua request GET, tidak ada ya
 
 Status kedua login: `CONNECTED`. Delapan panggilan, delapan baris `HOSTINGER_API_CALL` di `audit_logs`, tanpa token.
 
+## Sinkronisasi pilot M3 (12 November 2026)
+
+| | Login A | Login B |
+| :--- | ---: | ---: |
+| Paket (order) yang terlihat | 38 | 23 |
+| Website yang terlihat | 284 | 618 |
+| Halaman website (`per_page=50`) | 6 | 13 |
+| Langganan di daftar billing | 244 | 315 |
+
+- **Paket bersama:** 7 paket (118 website) terlihat dari kedua login. Seluruh inventaris: 54 paket berbeda, 784 website. Billing ketujuh paket itu ada di login B, sehingga login B menjadi pemiliknya (`ownerSource: BILLING`).
+- **Billing tidak lengkap per login:** 28 paket yang terlihat dari login A tidak punya langganan di billing login mana pun, sehingga tanggal kedaluwarsanya tidak diketahui (`ownerSource: FIRST_SEEN`). Dugaan: paket itu ditagihkan ke akun klien yang memberi akses ke login A. Pemilik belum memastikan.
+- **Paginasi:** `per_page=50` dihormati, dan `meta.total` cocok dengan jumlah item.
+- **Daftar order bawaan** memuat paket berstatus `suspended` (2 paket), jadi tidak hanya `active`. Paket `expired` belum teramati.
+- **Jenis website (`website_type`):** `wordpress` 682, `other` 101, `nodejs` 1. Tidak ada website tanpa domain.
+- **Stabilitas:** dua putaran sinkronisasi berturut-turut tidak mengubah satu pun paket, pemilik, akses, atau website.
+
 ## Dari spesifikasi OpenAPI resmi (dicek 12 November 2026)
 
 - `GET /api/hosting/v1/websites`: parameter `page`, `per_page`, `username`, `order_id`, `is_enabled`, `domain_filter`, `hosting_website_types`; respons `{ data, meta: { current_page, per_page, total } }`.
 - `GET /api/hosting/v1/orders`: parameter `page`, `per_page`, `statuses`, `order_ids`; respons `{ data, meta }`.
 - `GET /api/domains/v1/portfolio`: tanpa parameter; respons berupa array item `{ id, domain, type, status, created_at, expires_at, verification }`.
 - `GET /api/dns/v1/zones/{domain}`: respons berupa array record.
+- `GET /api/billing/v1/subscriptions`: tanpa parameter; respons berupa array `{ id, status, expires_at, is_auto_renewed, … }`; hanya memuat langganan yang ditagihkan ke login itu sendiri.
+- Pemakaian disk dan batas jumlah website tidak tersedia untuk shared hosting (hanya untuk Agency Hosting).
 
 ## Belum terbukti (PRD §3.3, dikerjakan di M4a)
 

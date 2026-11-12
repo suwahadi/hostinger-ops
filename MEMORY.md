@@ -12,7 +12,21 @@ Untuk agent berikutnya. Baca ini dulu, lalu `PRD.md` dan `AGENT.md`.
   - Penulisan hasil verifikasi (kemampuan, status, audit) belum dalam satu transaksi; dua verifikasi bersamaan untuk login yang sama bisa saling menyela.
   - Catatan probe DNS berbunyi "no domain in portfolio to probe" juga saat request portfolio-nya sendiri gagal; hanya item pertama portfolio yang dilihat.
   - Pesan penolakan non-interaktif kurang jelas bagi pengguna Git Bash (mintty, `isTTY` false): sebutkan PowerShell atau Windows Terminal.
-- **Berikutnya: M3** (inventaris: sinkronisasi paket dan website, antrean di PostgreSQL; PRD §12). Belum ada rencananya. Jangan mulai sebelum pemilik menyuruh; tulis rencananya dulu dengan skill writing-plans. Pembatas laju per login saat ini hanya di dalam proses API (`shortcut:` di `rate-limiter.ts`); pindahkan ke penyimpanan bersama saat worker ikut memanggil Hostinger.
+- **M3 (Inventaris & kapasitas) selesai secara kode** — rencana `docs/superpowers/plans/2026-11-12-m3-inventory.md`. Sinkronisasi pilot: 54 paket dan 784 website dari dua login, dua putaran tanpa perubahan (lihat `docs/API-CAPABILITIES.md`). **Masih menunggu pemilik:** mencocokkan jumlah paket dan website dengan hPanel.
+- Keputusan pemilik M3:
+  - worker berjalan **di dalam proses API**;
+  - paket yang terlihat dari beberapa login dicatat **sekali dengan banyak akses** (`hosting_account_access`), dan pemiliknya login yang membayar tagihannya. Ini menyimpang dari PRD §7.1 (lihat `docs/ARCHITECTURE.md`).
+- Belum terjawab: apakah 28 paket di login A (lihat `docs/API-CAPABILITIES.md`) tanpa data billing adalah paket klien. Pemilik menjawab "campuran / tidak yakin". Daftar billing login itu lengkap (244 langganan), tetapi tidak memuat ke-28 paket tersebut.
+- Review akhir M3 oleh reviewer independen: tiga temuan penting diperbaiki (domain beda huruf besar-kecil, halaman pendek dipercaya, kapasitas menghitung paket UNKNOWN). Perubahan akses-bersama dibuat **sesudah** review itu dan hanya dicakup test, tanpa review independen. Temuan kecil yang ditunda:
+  - job tetap `RUNNING` bila pencatatan gagalnya sendiri gagal, sampai API dinyalakan ulang;
+  - `recoverStaleJobs` mengabaikan `attempts`;
+  - domain ganda tidak dihitung di hasil;
+  - order `UNLISTED` dan `root_directory` kosong menimpa `webRoot` dengan null;
+  - kegagalan daftar billing menggagalkan seluruh sinkronisasi;
+  - pesan "unexpected response shape" tidak menyebut field;
+  - `POST /v1/sync` dan sinkronisasi yang gagal tidak menulis baris audit;
+  - beberapa jalur belum dites (balapan P2002, pemulihan saat worker mulai, gagal halaman 2 di level prosesor).
+- **Berikutnya: M4** (migrasi WordPress; mulai dari M4a, pembuktian perilaku API di akun pilot). Belum ada rencananya. Jangan mulai sebelum pemilik menyuruh.
 
 ## Yang sudah ada
 
@@ -20,15 +34,16 @@ Untuk agent berikutnya. Baca ini dulu, lalu `PRD.md` dan `AGENT.md`.
 | :--- | :--- |
 | `packages/shared` | AES-256-GCM + skema Zod respons |
 | `packages/database` | Skema Prisma lengkap PRD §7.1, migrasi `20261111000000_init` (termasuk trigger hanya-tambah `audit_logs`), `createDb`, `createTestDb` |
-| `packages/hostinger-adapter` | Client Hostinger (Bearer, 30 detik, 90/menit per login, 429 + `Retry-After` maks 60 detik, 3 percobaan), penyedia token dari vault, 4 probe baca-saja |
-| `apps/api` | Fastify `127.0.0.1:3000`, kunci internal `x-api-key`, route inventaris baca-saja, `POST /v1/logins/:alias/verify` dengan audit per panggilan Hostinger |
+| `packages/hostinger-adapter` | Client Hostinger (Bearer, 30 detik, 90/menit per login, 429 + `Retry-After` maks 60 detik, 3 percobaan), penyedia token dari vault, 4 probe baca-saja, paginasi |
+| `apps/worker` | Antrean `jobs` di PostgreSQL, loop worker (berjalan di proses API), prosesor `sync-login` |
+| `apps/api` | Fastify `127.0.0.1:3000` + worker, kunci internal `x-api-key`; route inventaris, detail website, kapasitas, verifikasi, sinkronisasi |
 | `apps/api/src/cli` | `ops:secret:set <NAME>` dan `ops:login:add <alias>`; menolak stdin non-interaktif; dijalankan dari `apps/api/dist` (perlu `corepack pnpm build`) |
-| `apps/mcp-server` | 5 tool: `list_logins`, `list_accounts`, `list_websites`, `get_login_capabilities`, `verify_login_connection`; `.mcp.json` di root |
+| `apps/mcp-server` | 8 tool: `list_logins`, `list_accounts`, `list_websites`, `get_login_capabilities`, `verify_login_connection`, `trigger_inventory_sync`, `get_website_details`, `get_capacity_report`; `.mcp.json` di root |
 | `infra/docker-compose.yml` | Hanya PostgreSQL 17; container `ops-postgres` berjalan di `127.0.0.1:5433` |
 | `docs/` | `ARCHITECTURE.md`, `SECURITY.md`, `API-CAPABILITIES.md` |
-| Test | 95 test; `corepack pnpm typecheck && corepack pnpm test && corepack pnpm build` lolos |
+| Test | 138 test; `corepack pnpm typecheck && corepack pnpm test && corepack pnpm build` lolos |
 
-Belum ada: worker, antrean, sinkronisasi inventaris, `ssh-adapter`, `ops:approve`/`ops:reject`, kelima `SKILL.md`.
+Belum ada: `ssh-adapter`, migrasi, `ops:approve`/`ops:reject`, memori proyek, kelima `SKILL.md`.
 
 Catatan operasional:
 - Setelah kode berubah: `corepack pnpm build`, matikan lalu nyalakan ulang `corepack pnpm dev:api`, dan `/mcp` (reconnect) di Claude Code.
