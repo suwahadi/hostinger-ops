@@ -26,8 +26,13 @@ export async function getAllPages(client: HostingerClient, path: string, perPage
     } | null;
     if (!body || !Array.isArray(body.data)) throw unexpectedShape(path);
     items.push(...body.data);
-    const total = typeof body.meta?.total === "number" ? body.meta.total : Infinity;
-    if (body.data.length < perPage || page * perPage >= total) return items;
+    const total = typeof body.meta?.total === "number" ? body.meta.total : undefined;
+    // With a total, a short page proves nothing (Hostinger may cap per_page); only the count does.
+    if (total !== undefined && items.length >= total) return items;
+    if (total === undefined && body.data.length < perPage) return items;
+    if (body.data.length === 0) {
+      throw new HostingerRequestError(`Hostinger GET ${path} returned ${items.length} of ${total} items`);
+    }
   }
   throw new HostingerRequestError(`Hostinger GET ${path} returned more than ${MAX_PAGES} pages`);
 }

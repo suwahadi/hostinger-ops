@@ -171,3 +171,15 @@ test("every Hostinger call is audited as WORKER under the job id, without the to
   expect(audit.find((a) => a.action === "SYNC_LOGIN")?.result).toBe("OK");
   expect(JSON.stringify(audit)).not.toContain(token);
 });
+
+test("an existing mixed-case domain stays ACTIVE when Hostinger lists it in lowercase", async () => {
+  const account = await db.hostingAccount.findUniqueOrThrow({ where: { code: "102" } });
+  await db.website.create({ data: { accountId: account.id, domain: "Campur.com", status: "ACTIVE" } });
+  await syncLoginInventory(
+    deps(hostinger({ orders: [{ id: 102, status: "active", plan: { name: "Business" } }], subscriptions: [], websites: [{ domain: "campur.com", order_id: 102, is_enabled: true }] })),
+    job(),
+  );
+  expect(await db.website.findMany({ where: { domain: { equals: "campur.com", mode: "insensitive" } }, select: { status: true } })).toEqual([
+    { status: "ACTIVE" },
+  ]);
+});

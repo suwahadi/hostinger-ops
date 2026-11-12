@@ -63,3 +63,14 @@ test("getList returns an array body and rejects anything else", async () => {
   const denied: HostingerClient = { get: async () => ({ status: 403, error: null, body: null }) };
   await expect(getList(denied, "/y")).rejects.toThrow("Hostinger GET /y failed: 403");
 });
+
+test("keeps paging when Hostinger caps the page size below per_page", async () => {
+  const { client, calls } = pagedClient({ 1: 20, 2: 20, 3: 17 }, 57);
+  expect(await getAllPages(client, "/x")).toHaveLength(57);
+  expect(calls).toHaveLength(3);
+});
+
+test("fewer items than meta.total is an error, not a complete list", async () => {
+  const { client } = pagedClient({ 1: 20 }, 57);
+  await expect(getAllPages(client, "/x")).rejects.toThrow("Hostinger GET /x returned 20 of 57 items");
+});

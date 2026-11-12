@@ -99,16 +99,22 @@ export function inventoryRoutes(
       const fewestWebsitesFirst = (a: { websiteCount: number | null }, b: { websiteCount: number | null }) =>
         (a.websiteCount ?? Infinity) - (b.websiteCount ?? Infinity);
       const deadline = Date.now() + EXPIRING_WITHIN_MS;
-      const accounts = logins.flatMap((l) => l.accounts);
+      // UNKNOWN plans no longer appear at Hostinger; their old counts would double-count moved websites.
+      const isKnown = (a: { status: string | null }) => a.status !== "UNKNOWN";
+      const accounts = logins.flatMap((l) => l.accounts).filter(isKnown);
       return {
-        logins: logins.map((login) => ({
-          alias: login.alias,
-          totals: {
-            accounts: login.accounts.length,
-            websites: login.accounts.reduce((sum, a) => sum + (a.websiteCount ?? 0), 0),
-          },
-          accounts: [...login.accounts].sort(fewestWebsitesFirst).map(toAccountSummary),
-        })),
+        logins: logins.map((login) => {
+          const known = login.accounts.filter(isKnown);
+          return {
+            alias: login.alias,
+            totals: {
+              accounts: known.length,
+              websites: known.reduce((sum, a) => sum + (a.websiteCount ?? 0), 0),
+              unknownAccounts: login.accounts.length - known.length,
+            },
+            accounts: known.sort(fewestWebsitesFirst).map(toAccountSummary),
+          };
+        }),
         // Already-expired plans are included: they are the most urgent ones.
         expiringSoon: accounts
           .filter((a) => a.expiresAt && a.expiresAt.getTime() <= deadline)

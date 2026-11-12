@@ -149,6 +149,7 @@ export async function syncLoginInventory(deps: SyncDeps, job: JobRow): Promise<S
       const existing = await tx.website.findMany({ where: { accountId: { in: accountIds } } });
       const existingByDomain = new Map(existing.map((w) => [w.domain.toLowerCase(), w]));
 
+      const seenIds: string[] = [];
       for (const [domain, website] of byDomain) {
         const old = existingByDomain.get(domain);
         const provider = {
@@ -164,12 +165,15 @@ export async function syncLoginInventory(deps: SyncDeps, job: JobRow): Promise<S
           ...(website.website_type === "wordpress" ? { websiteType: "WORDPRESS" as const } : {}),
           metadata: { ...asObject(old?.metadata), provider } as Prisma.InputJsonObject,
         };
-        if (old) await tx.website.update({ where: { id: old.id }, data });
-        else await tx.website.create({ data: { domain, ...data } });
+        const row = old
+          ? await tx.website.update({ where: { id: old.id }, data })
+          : await tx.website.create({ data: { domain, ...data } });
+        seenIds.push(row.id);
       }
 
+      // Marked by id, not by domain: stored domains may differ in case from what Hostinger returns.
       const markedWebsites = await tx.website.updateMany({
-        where: { accountId: { in: accountIds }, domain: { notIn: [...byDomain.keys()] }, status: { not: "UNKNOWN" } },
+        where: { accountId: { in: accountIds }, id: { notIn: seenIds }, status: { not: "UNKNOWN" } },
         data: { status: "UNKNOWN" },
       });
       await tx.hostingerLogin.update({ where: { id: login.id }, data: { lastSyncedAt: now } });

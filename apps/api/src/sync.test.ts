@@ -21,6 +21,9 @@ const accountA = await db.hostingAccount.create({
 await db.hostingAccount.create({
   data: { code: "B", loginId: sumber.id, websiteCount: 1, expiresAt: new Date(Date.now() + 90 * day) },
 });
+await db.hostingAccount.create({
+  data: { code: "C", loginId: sumber.id, websiteCount: 5, status: "UNKNOWN", expiresAt: new Date(Date.now() - 5 * day) },
+});
 await db.website.create({
   data: { accountId: accountA.id, domain: "contoh.com", webRoot: "/home/u1/domains/contoh.com/public_html", metadata: { provider: {} } },
 });
@@ -69,13 +72,13 @@ test("accounts carry username, status and expiry", async () => {
   });
 });
 
-test("capacity lists accounts by fewest websites and flags plans expiring within 30 days", async () => {
+test("capacity lists accounts by fewest websites, flags plans expiring within 30 days, and leaves UNKNOWN plans out", async () => {
   const body = (await get("/v1/capacity")).json();
   const sumberReport = body.logins.find((l: { alias: string }) => l.alias === "sumber");
   expect(sumberReport.accounts.map((a: { code: string }) => a.code)).toEqual(["B", "A"]);
-  expect(sumberReport.totals).toEqual({ accounts: 2, websites: 4 });
+  expect(sumberReport.totals).toEqual({ accounts: 2, websites: 4, unknownAccounts: 1 });
   expect(body.expiringSoon.map((a: { code: string }) => a.code)).toEqual(["A"]);
   expect((await get("/v1/capacity?login=tujuan")).json().logins).toEqual([
-    { alias: "tujuan", totals: { accounts: 0, websites: 0 }, accounts: [] },
+    { alias: "tujuan", totals: { accounts: 0, websites: 0, unknownAccounts: 0 }, accounts: [] },
   ]);
 });
