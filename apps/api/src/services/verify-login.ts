@@ -17,6 +17,7 @@ export type VerifyDeps = {
   fetch?: typeof fetch;
   sleep?: Sleep;
   requestId: string;
+  actor?: "CLAUDE_MCP" | "WEB_HUMAN";
 };
 
 export type VerifyResult = { login: LoginSummary; capabilities: CapabilitySummary[]; hint: string | null };
@@ -44,7 +45,7 @@ export async function verifyLogin(deps: VerifyDeps, alias: string): Promise<Veri
 
   const audit = (action: string, result: string, detail?: object) =>
     db.auditLog.create({
-      data: { requestId: deps.requestId, actor: "CLAUDE_MCP", action, resource: "hostinger_login", resourceId: alias, result, detail },
+      data: { requestId: deps.requestId, actor: deps.actor ?? "CLAUDE_MCP", action, resource: "hostinger_login", resourceId: alias, result, detail },
     });
 
   let status: string;

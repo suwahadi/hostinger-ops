@@ -3,9 +3,8 @@ import { CapabilitySummary, WebsiteDetail, WebsiteSummary } from "@ops/shared";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
 import { accessibleBy, accountInclude, iso, loginSummaries, toAccountSummary } from "../services/summaries.js";
+import { capacityReport } from "../services/inventory-report.js";
 import type { VerifyResult } from "../services/verify-login.js";
-
-const EXPIRING_WITHIN_MS = 30 * 24 * 60 * 60 * 1000;
 
 const LoginQuery = z.object({ login: z.string().optional() });
 const WebsitesQuery = z.object({
@@ -91,41 +90,7 @@ export function inventoryRoutes(
     app.get("/capacity", async (request, reply) => {
       const query = parseQuery(LoginQuery, request.query, reply);
       if (!query) return reply;
-      const logins = await db.hostingerLogin.findMany({
-        where: query.login ? { alias: query.login } : {},
-        orderBy: { alias: "asc" },
-      });
-      const allAccounts = await db.hostingAccount.findMany({
-        where: query.login ? accessibleBy(query.login) : {},
-        include: accountInclude,
-      });
-      const fewestWebsitesFirst = (a: { websiteCount: number | null }, b: { websiteCount: number | null }) =>
-        (a.websiteCount ?? Infinity) - (b.websiteCount ?? Infinity);
-      const deadline = Date.now() + EXPIRING_WITHIN_MS;
-      // UNKNOWN plans no longer appear at Hostinger; their old counts would double-count moved websites.
-      const isKnown = (a: { status: string | null }) => a.status !== "UNKNOWN";
-      const reachableFrom = (alias: string) => (a: (typeof allAccounts)[number]) =>
-        a.login.alias === alias || a.access.some((access) => access.login.alias === alias);
-      const sumWebsites = (list: { websiteCount: number | null }[]) => list.reduce((sum, a) => sum + (a.websiteCount ?? 0), 0);
-      const accounts = allAccounts.filter(isKnown);
-      return {
-        // Each plan once, however many logins can reach it.
-        totals: { accounts: accounts.length, websites: sumWebsites(accounts) },
-        logins: logins.map((login) => {
-          const reachable = allAccounts.filter(reachableFrom(login.alias));
-          const known = reachable.filter(isKnown);
-          return {
-            alias: login.alias,
-            totals: { accounts: known.length, websites: sumWebsites(known), unknownAccounts: reachable.length - known.length },
-            accounts: known.sort(fewestWebsitesFirst).map(toAccountSummary),
-          };
-        }),
-        // Already-expired plans are included: they are the most urgent ones.
-        expiringSoon: accounts
-          .filter((a) => a.expiresAt && a.expiresAt.getTime() <= deadline)
-          .sort((a, b) => a.expiresAt!.getTime() - b.expiresAt!.getTime())
-          .map(toAccountSummary),
-      };
+      return capacityReport(db, query.login);
     });
 
     app.get<{ Params: { alias: string } }>("/logins/:alias/capabilities", async (request, reply) => {

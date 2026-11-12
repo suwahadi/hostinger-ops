@@ -76,7 +76,7 @@ test("capacity lists accounts by fewest websites, flags plans expiring within 30
   const body = (await get("/v1/capacity")).json();
   const sumberReport = body.logins.find((l: { alias: string }) => l.alias === "sumber");
   expect(sumberReport.accounts.map((a: { code: string }) => a.code)).toEqual(["B", "A"]);
-  expect(sumberReport.totals).toEqual({ accounts: 2, websites: 4, unknownAccounts: 1 });
+  expect(sumberReport.totals).toEqual({ accounts: 2, websites: 1, unknownAccounts: 1 });
   expect(body.expiringSoon.map((a: { code: string }) => a.code)).toEqual(["A"]);
   expect((await get("/v1/capacity?login=tujuan")).json().logins).toEqual([
     { alias: "tujuan", totals: { accounts: 0, websites: 0, unknownAccounts: 0 }, accounts: [] },
@@ -95,8 +95,14 @@ test("a plan shared with another login appears in both logins' reports but is co
   const body = (await get("/v1/capacity")).json();
   const tujuanReport = body.logins.find((l: { alias: string }) => l.alias === "tujuan");
   expect(tujuanReport.accounts).toEqual([expect.objectContaining({ code: "S", loginAlias: "sumber", sharedWith: ["tujuan"] })]);
-  expect(tujuanReport.totals).toEqual({ accounts: 1, websites: 2, unknownAccounts: 0 });
-  expect(body.totals).toEqual({ accounts: 3, websites: 6 });
+  expect(tujuanReport.totals).toEqual({ accounts: 1, websites: 0, unknownAccounts: 0 });
+  expect(body.totals).toEqual({ accounts: 3, websites: 1 });
   const tujuanAccounts = (await get("/v1/accounts?login=tujuan")).json().accounts;
   expect(tujuanAccounts.map((a: { code: string }) => a.code)).toEqual(["S"]);
+});
+
+test("POST /v1/sync is audited as a Claude request", async () => {
+  await post("/v1/sync", { login: "tujuan" });
+  const row = await db.auditLog.findFirst({ where: { action: "SYNC_REQUEST", resourceId: "tujuan" }, orderBy: { createdAt: "desc" } });
+  expect(row).toMatchObject({ actor: "CLAUDE_MCP" });
 });
