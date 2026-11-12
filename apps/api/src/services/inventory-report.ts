@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@ops/database";
 import type { AccountSummary } from "@ops/shared";
+import { escapeLike } from "./like.js";
 import { accessibleBy, accountInclude, toAccountSummary } from "./summaries.js";
 
 const EXPIRING_WITHIN_MS = 30 * 24 * 60 * 60 * 1000;
@@ -41,10 +42,17 @@ export type PlanSort = "habis" | "website" | "kode";
 
 export async function listPlans(
   db: PrismaClient,
-  opts: { login?: string; sort: PlanSort },
+  opts: { login?: string; search?: string; sort: PlanSort },
 ): Promise<{ plans: PlanRow[]; unknownCount: number }> {
+  const search = opts.search ? escapeLike(opts.search) : "";
+  const where: Prisma.HostingAccountWhereInput = {
+    AND: [
+      opts.login ? accessibleBy(opts.login) : {},
+      search ? { OR: [{ username: { contains: search, mode: "insensitive" } }, { code: { contains: search } }] } : {},
+    ],
+  };
   const [accounts, countOf] = await Promise.all([
-    db.hostingAccount.findMany({ where: opts.login ? accessibleBy(opts.login) : {}, include: accountInclude }),
+    db.hostingAccount.findMany({ where, include: accountInclude }),
     websiteCounter(db),
   ]);
   const known = accounts.filter((a) => a.status !== "UNKNOWN");

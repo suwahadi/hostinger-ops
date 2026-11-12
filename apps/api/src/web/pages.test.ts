@@ -193,3 +193,29 @@ test("favicon.ico answers 204 without a session so browsers log no error", async
   const res = await app.inject({ url: "/favicon.ico", headers: { host } });
   expect(res.statusCode).toBe(204);
 });
+
+test("paket links each username to the website page for that plan", async () => {
+  expect((await page("/paket")).body).toContain('href="/website?username=u111"');
+});
+
+test("website filtered by username shows the plan details and only its websites", async () => {
+  const res = await page("/website?username=U111");
+  expect(res.body).toContain('data-plan="1001"');
+  expect(res.body).toContain("hostinger_premium_v2");
+  expect(rowCount(res.body, "website")).toBe(3);
+  expect(res.body).not.toContain("situs-01.com");
+  expect(res.body).toContain('name="username" value="u111"');
+});
+
+test("a username with no plan says so", async () => {
+  const res = await page("/website?username=u999");
+  expect(res.body).toContain("Tidak ada paket dengan username u999");
+  expect(rowCount(res.body, "website")).toBe(0);
+});
+
+test("paket search finds plans by part of the username or order code", async () => {
+  expect(rowCount((await page("/paket?cari=222")).body, "plan")).toBe(1);
+  expect(rowOf((await page("/paket?cari=U11")).body, 'data-row="plan"')).toContain("1001");
+  expect(rowCount((await page("/paket?cari=1002")).body, "plan")).toBe(1);
+  expect(rowCount((await page("/paket?cari=%25")).body, "plan")).toBe(0);
+});

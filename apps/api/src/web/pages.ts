@@ -1,7 +1,8 @@
 import type { Prisma, PrismaClient } from "@ops/database";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { inventoryTotals, listPlans, type PlanRow, type PlanSort } from "../services/inventory-report.js";
-import { accessibleBy, loginSummaries } from "../services/summaries.js";
+import { escapeLike } from "../services/like.js";
+import { accessibleBy, accountInclude, loginSummaries, toAccountSummary } from "../services/summaries.js";
 import { daysUntil, formatCount, formatDate, formatDateTime, formatRelativeDays } from "./format.js";
 import { html, type SafeHtml } from "./html.js";
 import { layout, type Section } from "./layout.js";
@@ -57,8 +58,14 @@ function actionButton(action: string, login: string, label: string, variant = ""
   } aria-label="${label} ${login}">${label}</button></form>`;
 }
 
+const websitesOfPlan = (username: string) => `/website?username=${encodeURIComponent(username)}`;
+
+function usernameLink(username: string | null) {
+  return username ? html`<a class="code" href="${websitesOfPlan(username)}">${username}</a>` : "";
+}
+
 function planCodeCell(plan: { code: string; username: string | null }) {
-  return html`<td><span class="code">${plan.code}</span>${plan.username ? html`<br><span class="code muted">${plan.username}</span>` : ""}</td>`;
+  return html`<td><span class="code">${plan.code}</span>${plan.username ? html`<br>${usernameLink(plan.username)}` : ""}</td>`;
 }
 
 async function ringkasan(db: PrismaClient) {
@@ -128,14 +135,18 @@ function planRow(plan: PlanRow) {
 
 async function paket(db: PrismaClient, query: Query) {
   const login = text(query.login);
+  const cari = text(query.cari);
   const sort: PlanSort = query.urut === "website" || query.urut === "kode" ? query.urut : "habis";
   const aliases = (await db.hostingerLogin.findMany({ orderBy: { alias: "asc" }, select: { alias: true } })).map((l) => l.alias);
   const unknownLogin = login !== "" && !aliases.includes(login);
-  const { plans, unknownCount } = unknownLogin ? { plans: [], unknownCount: 0 } : await listPlans(db, { login: login || undefined, sort });
+  const { plans, unknownCount } = unknownLogin
+    ? { plans: [], unknownCount: 0 }
+    : await listPlans(db, { login: login || undefined, search: cari || undefined, sort });
   const sortOption = (value: PlanSort, label: string) =>
     html`<option value="${value}"${value === sort ? html` selected` : ""}>${label}</option>`;
   return html`
 <form class="filters" method="get" action="/paket">
+<label>Cari username atau kode order<input type="search" name="cari" value="${cari}" placeholder="misal u12345 atau 1009"></label>
 <label>Login<select name="login">${loginOptions(aliases, login)}</select></label>
 <label>Urutkan<select name="urut">${sortOption("habis", "Tanggal habis terdekat")}${sortOption("website", "Website paling sedikit")}${sortOption("kode", "Kode order")}</select></label>
 <button type="submit">Tampilkan</button>
@@ -150,7 +161,9 @@ ${
       )
     : unknownLogin
       ? ""
-      : html`<p class="empty">Belum ada paket. Jalankan sinkronisasi dari Claude atau halaman Ringkasan.</p>`
+      : cari
+        ? html`<p class="empty">Tidak ada paket dengan username atau kode order yang memuat "${cari}".</p>`
+        : html`<p class="empty">Belum ada paket. Jalankan sinkronisasi dari Claude atau halaman Ringkasan.</p>`
 }
 ${unknownCount ? html`<p class="lead">${unknownCount} paket tidak lagi terlihat di Hostinger (UNKNOWN) dan tidak ditampilkan.</p>` : ""}`;
 }
@@ -166,14 +179,16 @@ async function website(db: PrismaClient, query: Query) {
   const jenis = WEBSITE_TYPES.find((t) => t === query.jenis);
   const status = WEBSITE_STATUSES.find((s) => s === query.status);
   const hal = pageNumber(query.hal);
+  // Hostinger usernames are lowercase (u123456789), so an exact lowercase match avoids ILIKE wildcards.
+  const username = text(query.username).toLowerCase();
   const aliases = (await db.hostingerLogin.findMany({ orderBy: { alias: "asc" }, select: { alias: true } })).map((l) => l.alias);
   const where: Prisma.WebsiteWhereInput = {
-    // Prisma passes `contains` to ILIKE unescaped, so % and _ would act as wildcards.
-    ...(q ? { domain: { contains: q.replace(/[\\%_]/g, (c) => `\\${c}`), mode: "insensitive" } } : {}),
+    ...(q ? { domain: { contains: escapeLike(q), mode: "insensitive" } } : {}),
     status: status ?? { not: "UNKNOWN" },
     ...(jenis ? { websiteType: jenis } : {}),
-    ...(login ? { account: accessibleBy(login) } : {}),
+    ...(login || username ? { account: { ...(login ? accessibleBy(login) : {}), ...(username ? { username } : {}) } } : {}),
   };
+  const planPanel = username ? await planPanels(db, username) : "";
   const [total, rows] = await Promise.all([
     db.website.count({ where }),
     db.website.findMany({
@@ -186,12 +201,12 @@ async function website(db: PrismaClient, query: Query) {
   ]);
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const linkTo = (page: number) =>
-    `/website?${new URLSearchParams({ q, login, jenis: jenis ?? "", status: status ?? "", hal: String(page) })}`;
+    `/website?${new URLSearchParams({ q, username, login, jenis: jenis ?? "", status: status ?? "", hal: String(page) })}`;
   const option = (value: string, label: string, selected: string | undefined) =>
     html`<option value="${value}"${value === (selected ?? "") ? html` selected` : ""}>${label}</option>`;
   const body = rows.map(
     (w) =>
-      html`<tr data-row="website"><th scope="row"><a href="/website/${encodeURIComponent(w.domain)}">${w.domain}</a></th><td>${TYPE_LABELS[w.websiteType] ?? w.websiteType}</td><td${w.status === "ACTIVE" ? "" : html` class="urgent"`}>${w.status}</td><td><span class="code">${w.account.username ?? ""}</span></td><td>${w.account.login.alias}</td><td><span class="path">${w.webRoot ?? ""}</span></td></tr>`,
+      html`<tr data-row="website"><th scope="row"><a href="/website/${encodeURIComponent(w.domain)}">${w.domain}</a></th><td>${TYPE_LABELS[w.websiteType] ?? w.websiteType}</td><td${w.status === "ACTIVE" ? "" : html` class="urgent"`}>${w.status}</td><td>${usernameLink(w.account.username)}</td><td>${w.account.login.alias}</td><td><span class="path">${w.webRoot ?? ""}</span></td></tr>`,
   );
   const results =
     total === 0
@@ -210,12 +225,35 @@ ${table(
   return html`
 <form class="filters" method="get" action="/website">
 <label>Cari domain<input type="search" name="q" value="${q}" placeholder="sebagian nama domain"></label>
+<label>Username paket<input type="search" name="username" value="${username}" placeholder="misal u356639325"></label>
 <label>Login<select name="login">${loginOptions(aliases, login)}</select></label>
 <label>Jenis<select name="jenis">${option("", "Semua jenis", jenis)}${WEBSITE_TYPES.map((t) => option(t, TYPE_LABELS[t]!, jenis))}</select></label>
 <label>Status<select name="status">${option("", "Semua kecuali UNKNOWN", status)}${WEBSITE_STATUSES.map((s) => option(s, s, status))}</select></label>
 <button type="submit">Cari</button>
 </form>
+${planPanel}
 ${results}`;
+}
+
+async function planPanels(db: PrismaClient, username: string) {
+  const accounts = await db.hostingAccount.findMany({ where: { username }, include: accountInclude, orderBy: { code: "asc" } });
+  if (accounts.length === 0) return html`<p class="empty">Tidak ada paket dengan username ${username}.</p>`;
+  const counts = await Promise.all(accounts.map((a) => db.website.count({ where: { accountId: a.id, status: { not: "UNKNOWN" } } })));
+  return accounts.map((account, i) => {
+    const plan = toAccountSummary(account);
+    const expires = plan.expiresAt ? new Date(plan.expiresAt) : null;
+    return html`<h2>Paket ${plan.username}</h2>
+<dl class="detail plan-detail" data-plan="${plan.code}">
+<dt>Kode order</dt><dd class="code">${plan.code}</dd>
+<dt>Paket</dt><dd>${plan.planType ?? "tidak diketahui"}</dd>
+<dt>Status</dt><dd>${plan.status ?? "tidak diketahui"}</dd>
+<dt>Habis</dt><dd>${expires ? html`<span${daysUntil(expires) <= URGENT_DAYS ? html` class="urgent"` : ""}>${formatRelativeDays(expires)}</span>, ${formatDate(expires)}` : "tidak diketahui"}</dd>
+<dt>Auto-renew</dt><dd>${autoRenewText(plan.autoRenew)}</dd>
+<dt>Pemilik</dt><dd>${plan.loginAlias}</dd>
+<dt>Dibagi ke</dt><dd>${plan.sharedWith.length ? plan.sharedWith.join(", ") : "tidak ada"}</dd>
+<dt>Website</dt><dd>${counts[i]} (tanpa yang UNKNOWN)</dd>
+</dl>`;
+  });
 }
 
 async function websiteDetail(db: PrismaClient, domain: string) {
