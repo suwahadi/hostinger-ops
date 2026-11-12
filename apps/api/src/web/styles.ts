@@ -35,6 +35,7 @@ a { color: var(--pine); }
 .side ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
 .side a { display: flex; align-items: center; gap: 0.65rem; min-height: 44px; padding: 0 0.75rem; border-radius: 6px; color: var(--ink); text-decoration: none; }
 .icon { flex: none; width: 1.25rem; height: 1.25rem; }
+.type-logo { display: block; width: 1.375rem; height: 1.375rem; }
 .side a .icon { color: var(--muted); }
 .side a[aria-current="page"] .icon { color: #ffffff; }
 .side a:hover { background: var(--paper); }

@@ -285,3 +285,36 @@ test("website detail ends with the domain expiry, using the parent domain for su
   }
   expect((await page("/website/under_score.com")).body).toContain("Domain expired</dt><dd>tidak diketahui");
 });
+
+test("website type is shown as a coloured logo only, named for screen readers; types without a logo stay text", async () => {
+  const account = await db.hostingAccount.findUniqueOrThrow({ where: { code: "1001" } });
+  await db.website.createMany({
+    data: [
+      { accountId: account.id, domain: "jenis-laravel.com", websiteType: "LARAVEL" },
+      { accountId: account.id, domain: "jenis-php.com", websiteType: "CUSTOM_PHP" },
+      { accountId: account.id, domain: "jenis-statis.com", websiteType: "STATIC" },
+      { accountId: account.id, domain: "jenis-node.com", metadata: { provider: { websiteType: "nodejs" } } },
+      { accountId: account.id, domain: "jenis-lain.com", metadata: { provider: { websiteType: "other" } } },
+    ],
+  });
+  const cell = (body: string, domain: string) => body.slice(body.indexOf(`>${domain}</a>`)).split("</td>")[0]!;
+  const list = (await page("/website?q=jenis-")).body;
+  for (const [domain, name] of [["jenis-laravel.com", "Laravel"], ["jenis-php.com", "PHP"], ["jenis-statis.com", "HTML statis"], ["jenis-node.com", "Node.js"]]) {
+    expect(cell(list, domain!)).toContain(`<svg class="type-logo" viewBox=`);
+    expect(cell(list, domain!)).toContain(`role="img" aria-label="${name}"`);
+  }
+  expect(cell(list, "jenis-lain.com")).not.toContain("<svg");
+  expect(cell(list, "jenis-lain.com")).toContain("Belum dikenali");
+  const detail = (await page("/website/contoh.com")).body;
+  expect(detail).toMatch(/<dt>Jenis<\/dt><dd><svg class="type-logo"[^>]*aria-label="WordPress"/);
+});
+
+test("type logos carry only plain shapes: no script, event handler, link or inline style", async () => {
+  const list = (await page("/website?q=contoh")).body;
+  const logos = list.match(/<svg class="type-logo"[\s\S]*?<\/svg>/g) ?? [];
+  expect(logos.length).toBeGreaterThan(0);
+  for (const logo of logos) {
+    expect(logo).not.toMatch(/<script|\son[a-z]+=|href|style=|url\(|<image|<foreignObject/i);
+    expect([...logo.matchAll(/<([a-z]+)/g)].every(([, tag]) => ["svg", "title", "g", "path", "rect"].includes(tag!))).toBe(true);
+  }
+});

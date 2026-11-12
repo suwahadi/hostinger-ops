@@ -8,6 +8,7 @@ import { html, type SafeHtml } from "./html.js";
 import { icon } from "./icons.js";
 import { layout, type Section } from "./layout.js";
 import { pager } from "./pager.js";
+import { typeLogo } from "./type-logos.js";
 
 const PAGE_SIZE = 50;
 // Only a plain hostname becomes a link; anything else from the provider stays text.
@@ -31,6 +32,10 @@ const TYPE_LABELS: Record<string, string> = {
   STATIC: "Statis",
   UNKNOWN: "Belum dikenali",
 };
+const providerOf = (metadata: unknown) =>
+  ((metadata as { provider?: Record<string, unknown> } | null)?.provider ?? {}) as Record<string, unknown>;
+const websiteKind = (websiteType: string, metadata: unknown) =>
+  typeLogo(websiteType, providerOf(metadata).websiteType) ?? html`<span class="muted">${TYPE_LABELS[websiteType] ?? websiteType}</span>`;
 const ACTOR_LABELS: Record<string, string> = { CLAUDE_MCP: "Claude", CLI_HUMAN: "Terminal", WORKER: "Worker", WEB_HUMAN: "Web" };
 
 type Query = Record<string, string | undefined>;
@@ -219,7 +224,7 @@ async function website(db: PrismaClient, query: Query) {
     html`<option value="${value}"${value === (selected ?? "") ? html` selected` : ""}>${label}</option>`;
   const body = rows.map(
     (w) =>
-      html`<tr data-row="website"><th scope="row"><a href="/website/${encodeURIComponent(w.domain)}">${w.domain}</a></th><td>${TYPE_LABELS[w.websiteType] ?? w.websiteType}</td><td${w.status === "ACTIVE" ? "" : html` class="urgent"`}>${w.status}</td><td>${usernameLink(w.account.username)}</td><td>${w.account.login.alias}</td><td><span class="path">${w.webRoot ?? ""}</span></td></tr>`,
+      html`<tr data-row="website"><th scope="row"><a href="/website/${encodeURIComponent(w.domain)}">${w.domain}</a></th><td>${websiteKind(w.websiteType, w.metadata)}</td><td${w.status === "ACTIVE" ? "" : html` class="urgent"`}>${w.status}</td><td>${usernameLink(w.account.username)}</td><td>${w.account.login.alias}</td><td><span class="path">${w.webRoot ?? ""}</span></td></tr>`,
   );
   const results =
     total === 0
@@ -285,14 +290,14 @@ async function websiteDetail(db: PrismaClient, domain: string) {
   const expiry = expires ? `${formatDate(expires)} (${formatRelativeDays(expires)})` : "tidak diketahui";
   const expiryClass = expires && daysUntil(expires) <= 30 ? "urgent" : "";
   return rows.map((w) => {
-    const provider = ((w.metadata as { provider?: Record<string, unknown> } | null)?.provider ?? {}) as Record<string, unknown>;
+    const provider = providerOf(w.metadata);
     const field = (label: string, value: unknown, className = "") =>
       html`<dt>${label}</dt><dd${className ? html` class="${className}"` : ""}>${value === null || value === undefined || value === "" ? "tidak diketahui" : String(value)}</dd>`;
     const external = isPlainHostname(w.domain)
       ? html` <a class="external" href="https://${w.domain}" target="_blank" rel="noopener noreferrer" aria-label="Buka ${w.domain} di tab baru" title="Buka di tab baru">${icon("external")}</a>`
       : "";
     return html`<h2 class="domain-title">${w.domain}${external}</h2><dl class="detail">
-${field("Status", w.status)}${field("Jenis", TYPE_LABELS[w.websiteType] ?? w.websiteType)}${field("Jenis di Hostinger", provider.websiteType)}
+${field("Status", w.status)}<dt>Jenis</dt><dd>${websiteKind(w.websiteType, w.metadata)}</dd>${field("Jenis di Hostinger", provider.websiteType)}
 ${field("Kode order", w.account.code, "code")}${field("Paket", w.account.planType)}${field("Username", w.account.username, "code")}
 ${field("Login pemilik", w.account.login.alias)}${field("Bisa diakses dari", w.account.access.map((a) => a.login.alias).join(", "))}
 ${field("Folder web", w.webRoot, "path")}${field("Jenis vhost", provider.vhostType)}${field("Domain induk", provider.parentDomain)}
