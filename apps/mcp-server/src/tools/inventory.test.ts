@@ -6,13 +6,36 @@ const apiUrl = "http://127.0.0.1:3000";
 const tool = (tools: InventoryTool[], name: string) => tools.find((t) => t.name === name)!;
 const toolsWith = (fetch: typeof globalThis.fetch) => inventoryTools(createApiClient({ apiUrl, apiKey: "k", fetch }));
 
-test("registers the four read-only tools", () => {
+test("registers the inventory tools", () => {
   expect(toolsWith(fetch).map((t) => t.name).sort()).toEqual([
     "get_login_capabilities",
     "list_accounts",
     "list_logins",
     "list_websites",
+    "verify_login_connection",
   ]);
+});
+
+test("verify_login_connection posts to the verify route", async () => {
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ login: { alias: "sumber", status: "CONNECTED" } })));
+  const result = await tool(toolsWith(fetchMock), "verify_login_connection").handler({ login: "sumber" });
+  const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+  expect(String(url)).toBe("http://127.0.0.1:3000/v1/logins/sumber/verify");
+  expect(init.method).toBe("POST");
+  expect(new Headers(init.headers).get("x-api-key")).toBe("k");
+  expect(JSON.parse(result.content[0]!.text).login.status).toBe("CONNECTED");
+});
+
+test("verify_login_connection requires a login", () => {
+  expect(tool(toolsWith(fetch), "verify_login_connection").inputSchema.safeParse({}).success).toBe(false);
+});
+
+test("a slow verify reports its own timeout length", async () => {
+  const timeout = async () => {
+    throw Object.assign(new Error("t"), { name: "TimeoutError" });
+  };
+  const result = await tool(toolsWith(timeout), "verify_login_connection").handler({ login: "sumber" });
+  expect(result.content[0]!.text).toBe("Hostinger Ops API did not respond within 180 seconds");
 });
 
 test("list_websites forwards filters, the key, and returns JSON text", async () => {

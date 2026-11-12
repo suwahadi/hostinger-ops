@@ -53,5 +53,13 @@ export function inventoryTools(client: ApiClient): InventoryTool[] {
       inputSchema: z.object({ login: z.string().describe("Login alias") }),
       handler: (args) => run(() => client.get(`/v1/logins/${encodeURIComponent(args.login ?? "")}/capabilities`)),
     },
+    {
+      name: "verify_login_connection",
+      description:
+        "Test a login's Hostinger API token with read-only requests and update its connection status and capabilities in the local database. Nothing is changed at Hostinger.",
+      inputSchema: z.object({ login: z.string().describe("Login alias") }),
+      handler: (args) =>
+        run(() => client.post(`/v1/logins/${encodeURIComponent(args.login ?? "")}/verify`, { timeoutMs: 180_000 })),
+    },
   ];
 }
