@@ -8,6 +8,7 @@ import { getUiCredential } from "./services/ui-password.js";
 import { verifyLogin } from "./services/verify-login.js";
 import { webAuthRoutes } from "./web/auth-routes.js";
 import { isAllowedHost, isSameOriginPost, readCookie, SECURITY_HEADERS, SESSION_COOKIE } from "./web/guard.js";
+import { webActions } from "./web/actions.js";
 import { errorPage, notFoundPage, webPages } from "./web/pages.js";
 import { APP_CSS } from "./web/styles.js";
 import { createLoginThrottle, createSessionStore, type LoginThrottle, type SessionStore } from "./web/session.js";
@@ -105,6 +106,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.register(syncRoutes(db), { prefix: "/v1" });
   app.register(webAuthRoutes({ db, sessions, throttle }));
   app.register(webPages(db));
+  const webVerify = (alias: string, requestId: string) =>
+    verifyLogin({ db, masterKey, limiter: hostingerLimiter, fetch, sleep, requestId, actor: "WEB_HUMAN" }, alias);
+  app.register(webActions({ db, verify: webVerify }));
   app.get("/assets/app.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(APP_CSS));
   app.get("/favicon.ico", async (_request, reply) => reply.code(204).send());
   return app;

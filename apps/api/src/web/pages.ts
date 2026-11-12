@@ -51,6 +51,12 @@ function table(head: SafeHtml, rows: SafeHtml[], caption: string) {
   return html`<div class="table-wrap"><table aria-label="${caption}"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 
+function actionButton(action: string, login: string, label: string, variant = "") {
+  return html`<form method="post" action="${action}" class="inline-form"><input type="hidden" name="login" value="${login}"><input type="hidden" name="kembali" value="/ringkasan"><button type="submit"${
+    variant ? html` class="${variant}"` : ""
+  } aria-label="${label} ${login}">${label}</button></form>`;
+}
+
 function planCodeCell(plan: { code: string; username: string | null }) {
   return html`<td><span class="code">${plan.code}</span>${plan.username ? html`<br><span class="code muted">${plan.username}</span>` : ""}</td>`;
 }
@@ -78,7 +84,11 @@ async function ringkasan(db: PrismaClient) {
               login.sync.error ? html`<br><span class="muted">${login.sync.error}</span>` : ""
             }`
           : html`<span class="muted">belum ada</span>`
-      }</td></tr>`,
+      }</td><td><div class="actions">${actionButton("/aksi/uji", login.alias, "Uji koneksi", "secondary")}${actionButton(
+        "/aksi/sinkron",
+        login.alias,
+        "Sinkronkan",
+      )}</div></td></tr>`,
   );
   return html`
 <dl class="stats" aria-label="Jumlah saat ini">
@@ -97,10 +107,12 @@ ${
     : html`<p class="empty">Tidak ada paket yang habis dalam 30 hari ke depan.</p>`
 }
 <h2>Login Hostinger</h2>
+<p class="lead">Kedua tombol hanya membaca dari Hostinger; tidak ada yang diubah di sana.</p>
+<form method="post" action="/aksi/sinkron" class="actions"><input type="hidden" name="kembali" value="/ringkasan"><button type="submit">Sinkronkan semua login</button></form>
 ${
   loginRows.length
     ? table(
-        html`<th scope="col">Login</th><th scope="col">Koneksi</th><th scope="col">Diuji</th><th scope="col">Sinkron terakhir</th><th scope="col">Job terakhir</th>`,
+        html`<th scope="col">Login</th><th scope="col">Koneksi</th><th scope="col">Diuji</th><th scope="col">Sinkron terakhir</th><th scope="col">Job terakhir</th><th scope="col">Aksi</th>`,
         loginRows,
         "Login Hostinger",
       )
