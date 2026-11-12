@@ -8,6 +8,9 @@
 - Rahasia di `secret_vaults` dienkripsi AES-256-GCM dengan IV acak 12 byte; `authTag` yang diubah membuat dekripsi gagal.
 - Tabel `audit_logs` hanya-tambah: trigger database menolak `UPDATE` dan `DELETE`.
 - Hook `.githooks/commit-msg` menolak atribusi AI di pesan commit.
+- Token Hostinger masuk hanya lewat prompt tersembunyi `ops:secret:set` / `ops:login:add`. Keduanya menolak stdin yang bukan terminal interaktif (di-pipe, atau `!` di Claude Code), dan menolak nilai berisi spasi atau karakter tak terlihat.
+- Token didekripsi hanya di proses API saat verifikasi. Audit per panggilan Hostinger hanya menyimpan path, status, nomor percobaan, dan durasi. Error dari `fetch` tidak pernah diteruskan karena pesannya bisa memuat detail request.
+- Uji koneksi berhenti setelah satu probe kena rate limit, supaya tidak memperparah pembatasan (PRD §3.2: pelanggaran berulang bisa memblokir IP).
 
 ## Risiko yang diterima pemilik (PRD §8.3, "kunci sedang")
 
