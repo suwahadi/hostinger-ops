@@ -17,6 +17,7 @@ export type SyncDeps = { db: PrismaClient; masterKey: Buffer; limiter: RateLimit
 export type SyncResult = {
   accounts: number;
   websites: number;
+  subscriptions: number;
   markedUnknown: { accounts: number; websites: number };
   skippedWithoutDomain: number;
 };
@@ -118,14 +119,13 @@ export async function syncLoginInventory(deps: SyncDeps, job: JobRow): Promise<S
         const sites = [...byDomain.values()].filter((w) => w.order_id === orderId);
         const username = sites.find((w) => w.username)?.username;
         const data = {
-          loginId: login.id,
           orderId: String(orderId),
-          planType: order?.plan?.name ?? null,
-          status: order ? (order.status ?? null) : "UNLISTED",
-          subscriptionId: order?.subscription_id ?? null,
           websiteCount: sites.length,
           lastSyncedAt: now,
           ...(username ? { username } : {}),
+          ...(order
+            ? { planType: order.plan?.name ?? null, status: order.status ?? null, subscriptionId: order.subscription_id ?? null }
+            : {}),
           ...(subscription
             ? {
                 expiresAt: subscription.expires_at ? new Date(subscription.expires_at) : null,
@@ -133,20 +133,49 @@ export async function syncLoginInventory(deps: SyncDeps, job: JobRow): Promise<S
               }
             : {}),
         };
+        // A plan can be reachable from several logins; only the login that is billed for it may claim ownership,
+        // otherwise ownership would flip to whichever login synced last.
+        const billedHere = subscription ? { loginId: login.id, ownerSource: "BILLING" } : {};
         const code = String(orderId);
-        const account = await tx.hostingAccount.upsert({ where: { code }, create: { code, ...data }, update: data });
+        const account = await tx.hostingAccount.upsert({
+          where: { code },
+          create: {
+            code,
+            ...data,
+            loginId: login.id,
+            ownerSource: subscription ? "BILLING" : "FIRST_SEEN",
+            ...(order ? {} : { status: "UNLISTED" }),
+          },
+          update: { ...data, ...billedHere },
+        });
+        await tx.hostingAccountAccess.upsert({
+          where: { loginId_accountId: { loginId: login.id, accountId: account.id } },
+          create: { loginId: login.id, accountId: account.id, lastSeenAt: now },
+          update: { lastSeenAt: now },
+        });
         accountIdByOrder.set(orderId, account.id);
       }
 
+      const accountIds = [...accountIdByOrder.values()];
+      const lostAccess = await tx.hostingAccountAccess.findMany({
+        where: { loginId: login.id, accountId: { notIn: accountIds } },
+        select: { accountId: true },
+      });
+      const lostIds = lostAccess.map((a) => a.accountId);
+      await tx.hostingAccountAccess.deleteMany({ where: { loginId: login.id, accountId: { in: lostIds } } });
+      const orphanIds = (
+        await tx.hostingAccount.findMany({ where: { id: { in: lostIds }, access: { none: {} } }, select: { id: true } })
+      ).map((a) => a.id);
       const markedAccounts = await tx.hostingAccount.updateMany({
-        where: { loginId: login.id, code: { notIn: [...orderIds].map(String) }, ...notUnknown },
+        where: { id: { in: orphanIds }, ...notUnknown },
+        data: { status: "UNKNOWN" },
+      });
+      const orphanWebsites = await tx.website.updateMany({
+        where: { accountId: { in: orphanIds }, status: { not: "UNKNOWN" } },
         data: { status: "UNKNOWN" },
       });
 
-      const accountIds = (await tx.hostingAccount.findMany({ where: { loginId: login.id }, select: { id: true } })).map(
-        (a) => a.id,
-      );
-      const existing = await tx.website.findMany({ where: { accountId: { in: accountIds } } });
+      const existing = await tx.website.findMany({ where: { accountId: { in: [...accountIds, ...lostIds] } } });
       const existingByDomain = new Map(existing.map((w) => [w.domain.toLowerCase(), w]));
 
       const seenIds: string[] = [];
@@ -181,7 +210,8 @@ export async function syncLoginInventory(deps: SyncDeps, job: JobRow): Promise<S
       return {
         accounts: orderIds.size,
         websites: byDomain.size,
-        markedUnknown: { accounts: markedAccounts.count, websites: markedWebsites.count },
+        subscriptions: subscriptions.length,
+        markedUnknown: { accounts: markedAccounts.count, websites: markedWebsites.count + orphanWebsites.count },
         skippedWithoutDomain,
       };
     },

@@ -37,19 +37,20 @@ enum AuditActor {
 }
 
 model HostingerLogin {
-  id             String              @id @default(uuid())
-  alias          String              @unique
+  id             String                 @id @default(uuid())
+  alias          String                 @unique
   tokenRef       String
-  status         String              @default("UNVERIFIED")
+  status         String                 @default("UNVERIFIED")
   lastVerifiedAt DateTime?
   lastSyncedAt   DateTime?
-  createdAt      DateTime            @default(now())
-  updatedAt      DateTime            @updatedAt
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
   accounts       HostingAccount[]
   capabilities   HostingCapability[]
   domains        Domain[]
-  sourceWaves    MigrationWave[]     @relation("WaveSource")
-  targetWaves    MigrationWave[]     @relation("WaveTarget")
+  accountAccess  HostingAccountAccess[]
+  sourceWaves    MigrationWave[]        @relation("WaveSource")
+  targetWaves    MigrationWave[]        @relation("WaveTarget")
 
   @@map("hostinger_logins")
 }
@@ -69,10 +70,10 @@ model HostingCapability {
 }
 
 model HostingAccount {
-  id             String         @id @default(uuid())
+  id             String                 @id @default(uuid())
   loginId        String
-  login          HostingerLogin @relation(fields: [loginId], references: [id], onDelete: Cascade)
-  code           String         @unique
+  login          HostingerLogin         @relation(fields: [loginId], references: [id], onDelete: Cascade)
+  code           String                 @unique
   orderId        String?
   username       String?
   planType       String?
@@ -88,12 +89,26 @@ model HostingAccount {
   expiresAt      DateTime?
   autoRenew      Boolean?
   lastSyncedAt   DateTime?
-  createdAt      DateTime       @default(now())
-  updatedAt      DateTime       @updatedAt
+  ownerSource    String                 @default("FIRST_SEEN")
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
   websites       Website[]
+  access         HostingAccountAccess[]
 
   @@index([loginId])
   @@map("hosting_accounts")
+}
+
+model HostingAccountAccess {
+  loginId    String
+  login      HostingerLogin @relation(fields: [loginId], references: [id], onDelete: Cascade)
+  accountId  String
+  account    HostingAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  lastSeenAt DateTime       @default(now())
+
+  @@id([loginId, accountId])
+  @@index([accountId])
+  @@map("hosting_account_access")
 }
 
 model Website {

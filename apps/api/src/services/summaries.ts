@@ -24,12 +24,25 @@ export async function loginSummaries(db: PrismaClient, where: Prisma.HostingerLo
   });
 }
 
-type AccountWithLogin = Prisma.HostingAccountGetPayload<{ include: { login: { select: { alias: true } } } }>;
+export const accountInclude = {
+  login: { select: { alias: true } },
+  access: { select: { login: { select: { alias: true } } } },
+} satisfies Prisma.HostingAccountInclude;
 
-export function toAccountSummary(account: AccountWithLogin): AccountSummary {
+type AccountWithLogins = Prisma.HostingAccountGetPayload<{ include: typeof accountInclude }>;
+
+export function accessibleBy(alias: string): Prisma.HostingAccountWhereInput {
+  return { OR: [{ login: { alias } }, { access: { some: { login: { alias } } } }] };
+}
+
+export function toAccountSummary(account: AccountWithLogins): AccountSummary {
   return AccountSummary.parse({
     ...account,
     loginAlias: account.login.alias,
+    sharedWith: account.access
+      .map((a) => a.login.alias)
+      .filter((alias) => alias !== account.login.alias)
+      .sort(),
     expiresAt: iso(account.expiresAt),
     lastSyncedAt: iso(account.lastSyncedAt),
   });

@@ -2,7 +2,7 @@ import type { PrismaClient } from "@ops/database";
 import { CapabilitySummary, WebsiteDetail, WebsiteSummary } from "@ops/shared";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
-import { iso, loginSummaries, toAccountSummary } from "../services/summaries.js";
+import { accessibleBy, accountInclude, iso, loginSummaries, toAccountSummary } from "../services/summaries.js";
 import type { VerifyResult } from "../services/verify-login.js";
 
 const EXPIRING_WITHIN_MS = 30 * 24 * 60 * 60 * 1000;
@@ -38,8 +38,8 @@ export function inventoryRoutes(
       const query = parseQuery(LoginQuery, request.query, reply);
       if (!query) return reply;
       const accounts = await db.hostingAccount.findMany({
-        where: query.login ? { login: { alias: query.login } } : {},
-        include: { login: { select: { alias: true } } },
+        where: query.login ? accessibleBy(query.login) : {},
+        include: accountInclude,
         orderBy: { code: "asc" },
       });
       return { accounts: accounts.map(toAccountSummary) };
@@ -50,7 +50,7 @@ export function inventoryRoutes(
       if (!query) return reply;
       const websites = await db.website.findMany({
         where: {
-          account: { code: query.account, login: query.login ? { alias: query.login } : undefined },
+          account: { code: query.account, ...(query.login ? accessibleBy(query.login) : {}) },
           project: query.project ? { code: query.project } : undefined,
           domain: query.domain ? { contains: query.domain, mode: "insensitive" } : undefined,
         },
@@ -93,25 +93,30 @@ export function inventoryRoutes(
       if (!query) return reply;
       const logins = await db.hostingerLogin.findMany({
         where: query.login ? { alias: query.login } : {},
-        include: { accounts: { include: { login: { select: { alias: true } } } } },
         orderBy: { alias: "asc" },
+      });
+      const allAccounts = await db.hostingAccount.findMany({
+        where: query.login ? accessibleBy(query.login) : {},
+        include: accountInclude,
       });
       const fewestWebsitesFirst = (a: { websiteCount: number | null }, b: { websiteCount: number | null }) =>
         (a.websiteCount ?? Infinity) - (b.websiteCount ?? Infinity);
       const deadline = Date.now() + EXPIRING_WITHIN_MS;
       // UNKNOWN plans no longer appear at Hostinger; their old counts would double-count moved websites.
       const isKnown = (a: { status: string | null }) => a.status !== "UNKNOWN";
-      const accounts = logins.flatMap((l) => l.accounts).filter(isKnown);
+      const reachableFrom = (alias: string) => (a: (typeof allAccounts)[number]) =>
+        a.login.alias === alias || a.access.some((access) => access.login.alias === alias);
+      const sumWebsites = (list: { websiteCount: number | null }[]) => list.reduce((sum, a) => sum + (a.websiteCount ?? 0), 0);
+      const accounts = allAccounts.filter(isKnown);
       return {
+        // Each plan once, however many logins can reach it.
+        totals: { accounts: accounts.length, websites: sumWebsites(accounts) },
         logins: logins.map((login) => {
-          const known = login.accounts.filter(isKnown);
+          const reachable = allAccounts.filter(reachableFrom(login.alias));
+          const known = reachable.filter(isKnown);
           return {
             alias: login.alias,
-            totals: {
-              accounts: known.length,
-              websites: known.reduce((sum, a) => sum + (a.websiteCount ?? 0), 0),
-              unknownAccounts: login.accounts.length - known.length,
-            },
+            totals: { accounts: known.length, websites: sumWebsites(known), unknownAccounts: reachable.length - known.length },
             accounts: known.sort(fewestWebsitesFirst).map(toAccountSummary),
           };
         }),

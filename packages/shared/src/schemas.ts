@@ -24,6 +24,7 @@ export const AccountSummary = z.object({
   websiteLimit: z.number().nullable(),
   expiresAt: isoDate,
   autoRenew: z.boolean().nullable(),
+  sharedWith: z.array(z.string()),
   lastSyncedAt: isoDate,
 });
 export type AccountSummary = z.infer<typeof AccountSummary>;

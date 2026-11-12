@@ -64,7 +64,7 @@ test("creates accounts with plan, expiry and username, and websites with WordPre
     ),
     job(),
   );
-  expect(result).toEqual({ accounts: 1, websites: 1, markedUnknown: { accounts: 0, websites: 0 }, skippedWithoutDomain: 1 });
+  expect(result).toEqual({ accounts: 1, websites: 1, subscriptions: 1, markedUnknown: { accounts: 0, websites: 0 }, skippedWithoutDomain: 1 });
   expect(await db.hostingAccount.findUniqueOrThrow({ where: { code: "101" } })).toMatchObject({
     loginId: sumber.id,
     planType: "Premium",

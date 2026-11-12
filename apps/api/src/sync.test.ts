@@ -82,3 +82,21 @@ test("capacity lists accounts by fewest websites, flags plans expiring within 30
     { alias: "tujuan", totals: { accounts: 0, websites: 0, unknownAccounts: 0 }, accounts: [] },
   ]);
 });
+
+test("a plan shared with another login appears in both logins' reports but is counted once overall", async () => {
+  const tujuanLogin = await db.hostingerLogin.findUniqueOrThrow({ where: { alias: "tujuan" } });
+  const shared = await db.hostingAccount.create({ data: { code: "S", loginId: sumber.id, websiteCount: 2, status: "active" } });
+  await db.hostingAccountAccess.createMany({
+    data: [
+      { loginId: sumber.id, accountId: shared.id },
+      { loginId: tujuanLogin.id, accountId: shared.id },
+    ],
+  });
+  const body = (await get("/v1/capacity")).json();
+  const tujuanReport = body.logins.find((l: { alias: string }) => l.alias === "tujuan");
+  expect(tujuanReport.accounts).toEqual([expect.objectContaining({ code: "S", loginAlias: "sumber", sharedWith: ["tujuan"] })]);
+  expect(tujuanReport.totals).toEqual({ accounts: 1, websites: 2, unknownAccounts: 0 });
+  expect(body.totals).toEqual({ accounts: 3, websites: 6 });
+  const tujuanAccounts = (await get("/v1/accounts?login=tujuan")).json().accounts;
+  expect(tujuanAccounts.map((a: { code: string }) => a.code)).toEqual(["S"]);
+});
