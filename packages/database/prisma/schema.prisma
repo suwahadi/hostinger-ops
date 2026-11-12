@@ -34,6 +34,7 @@ enum AuditActor {
   CLAUDE_MCP
   CLI_HUMAN
   WORKER
+  WEB_HUMAN
 }
 
 model HostingerLogin {
@@ -282,6 +283,14 @@ model Job {
   @@index([status, runAfter])
   @@index([dedupeKey])
   @@map("jobs")
+}
+
+model UiCredential {
+  id           Int      @id @default(1)
+  passwordHash String
+  updatedAt    DateTime @updatedAt
+
+  @@map("ui_credentials")
 }
 
 model OperationLock {

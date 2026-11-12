@@ -31,3 +31,11 @@ test("only one active job per dedupe key", async () => {
   await db.job.updateMany({ where: { dedupeKey: "sync-login:x" }, data: { status: "DONE" } });
   await expect(db.job.create({ data: { kind: "sync-login", payload: {}, dedupeKey: "sync-login:x" } })).resolves.toBeTruthy();
 });
+
+test("ui credentials hold one row and WEB_HUMAN is a valid audit actor", async () => {
+  await db.uiCredential.create({ data: { passwordHash: "x" } });
+  await expect(db.uiCredential.create({ data: { passwordHash: "y" } })).rejects.toThrow();
+  await expect(
+    db.auditLog.create({ data: { requestId: "w", actor: "WEB_HUMAN", action: "T", resource: "r", result: "ok" } }),
+  ).resolves.toBeTruthy();
+});
