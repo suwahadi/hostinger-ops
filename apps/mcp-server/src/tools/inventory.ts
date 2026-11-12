@@ -61,5 +61,25 @@ export function inventoryTools(client: ApiClient): InventoryTool[] {
       handler: (args) =>
         run(() => client.post(`/v1/logins/${encodeURIComponent(args.login ?? "")}/verify`, { timeoutMs: 180_000 })),
     },
+    {
+      name: "trigger_inventory_sync",
+      description:
+        "Queue a background sync of hosting plans and websites from Hostinger for one login, or for every login when none is given. Read-only at Hostinger. Check progress with list_logins (sync.status, lastSyncedAt).",
+      inputSchema: z.object({ login: z.string().optional().describe("Login alias; omit to sync every login") }),
+      handler: (args) => run(() => client.post("/v1/sync", { body: args.login ? { login: args.login } : {} })),
+    },
+    {
+      name: "get_website_details",
+      description: "Show everything stored about a website by its exact domain: plan, login, web root, type, status, project.",
+      inputSchema: z.object({ domain: z.string().describe("Exact domain, e.g. contoh.com") }),
+      handler: (args) => run(() => client.get(`/v1/websites/${encodeURIComponent(args.domain ?? "")}`)),
+    },
+    {
+      name: "get_capacity_report",
+      description:
+        "Report hosting plans per login with website counts (fewest first, i.e. the plans with the most room) and plans expiring within 30 days or already expired.",
+      inputSchema: z.object({ login: z.string().optional().describe("Login alias") }),
+      handler: (args) => run(() => client.get("/v1/capacity", { login: args.login })),
+    },
   ];
 }

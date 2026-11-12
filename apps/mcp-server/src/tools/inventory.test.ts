@@ -8,12 +8,38 @@ const toolsWith = (fetch: typeof globalThis.fetch) => inventoryTools(createApiCl
 
 test("registers the inventory tools", () => {
   expect(toolsWith(fetch).map((t) => t.name).sort()).toEqual([
+    "get_capacity_report",
     "get_login_capabilities",
+    "get_website_details",
     "list_accounts",
     "list_logins",
     "list_websites",
+    "trigger_inventory_sync",
     "verify_login_connection",
   ]);
+});
+
+test("trigger_inventory_sync posts a JSON body to /v1/sync", async () => {
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify({ jobs: [] })));
+  await tool(toolsWith(fetchMock), "trigger_inventory_sync").handler({ login: "sumber" });
+  await tool(toolsWith(fetchMock), "trigger_inventory_sync").handler({});
+  const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+  expect(calls.map(([url]) => String(url))).toEqual(["http://127.0.0.1:3000/v1/sync", "http://127.0.0.1:3000/v1/sync"]);
+  expect(calls.map(([, init]) => init.body)).toEqual(['{"login":"sumber"}', "{}"]);
+  expect(calls[0]![1].method).toBe("POST");
+  expect(new Headers(calls[0]![1].headers).get("content-type")).toBe("application/json");
+});
+
+test("get_website_details encodes the domain into the path", async () => {
+  const fetchMock = vi.fn(async () => new Response("{}"));
+  await tool(toolsWith(fetchMock), "get_website_details").handler({ domain: "contoh.com/x" });
+  expect(String((fetchMock.mock.calls[0] as unknown as [string])[0])).toBe("http://127.0.0.1:3000/v1/websites/contoh.com%2Fx");
+});
+
+test("get_capacity_report forwards the login filter", async () => {
+  const fetchMock = vi.fn(async () => new Response("{}"));
+  await tool(toolsWith(fetchMock), "get_capacity_report").handler({ login: "sumber" });
+  expect(String((fetchMock.mock.calls[0] as unknown as [string])[0])).toBe("http://127.0.0.1:3000/v1/capacity?login=sumber");
 });
 
 test("verify_login_connection posts to the verify route", async () => {
