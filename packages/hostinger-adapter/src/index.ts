@@ -1,4 +1,5 @@
 export * from "./capabilities.js";
 export * from "./client.js";
+export * from "./pages.js";
 export * from "./rate-limiter.js";
 export * from "./token-provider.js";
