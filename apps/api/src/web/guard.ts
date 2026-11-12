@@ -33,11 +33,12 @@ export function isAllowedHost(host: string | undefined): boolean {
   return hostname !== undefined && ALLOWED_HOSTNAMES.has(hostname);
 }
 
+// The whole origin must match, port included: SameSite treats other local sites (e.g. localhost:80) as the
+// same site and would still send the cookie.
 export function isSameOriginPost(headers: IncomingHttpHeaders): boolean {
   if (headers["sec-fetch-site"] === "same-origin") return true;
-  const origin = headers.origin;
-  const hostname = typeof origin === "string" ? hostnameOf(origin) : undefined;
-  return hostname !== undefined && ALLOWED_HOSTNAMES.has(hostname);
+  const { origin, host } = headers;
+  return typeof origin === "string" && typeof host === "string" && origin.toLowerCase() === `http://${host.toLowerCase()}`;
 }
 
 export function safeReturnPath(value: unknown): string {

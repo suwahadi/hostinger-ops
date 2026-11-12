@@ -161,3 +161,23 @@ test("GET / goes to /ringkasan with a session", async () => {
   expect(res.statusCode).toBe(302);
   expect(res.headers.location).toBe("/ringkasan");
 });
+
+test("a percent-encoded /v1 path still needs the API key, even with a session", async () => {
+  const cookie = cookieOf(await postLogin(app, password));
+  const res = await app.inject({ url: "/%76%31/logins", headers: { host: "127.0.0.1:3000", cookie } });
+  expect(res.statusCode).toBe(401);
+  expect(res.body).not.toContain("logins\":[");
+});
+
+test("parallel wrong guesses cannot get past the five-attempt limit", async () => {
+  const target = makeApp({ throttle: createLoginThrottle() });
+  const results = await Promise.all(Array.from({ length: 12 }, () => postLogin(target, "tebakan salah sekali")));
+  expect(results.filter((r) => r.statusCode === 401).length).toBeLessThanOrEqual(5);
+  expect(results.filter((r) => r.statusCode === 429).length).toBeGreaterThanOrEqual(7);
+});
+
+test("an Origin on another port or scheme of the same host is 403", async () => {
+  expect((await postLogin(app, password, { host: "127.0.0.1:3000", origin: "http://127.0.0.1:8080" })).statusCode).toBe(403);
+  expect((await postLogin(app, password, { host: "127.0.0.1:3000", origin: "https://127.0.0.1:3000" })).statusCode).toBe(403);
+  expect((await postLogin(app, password, { host: "localhost:3000", origin: "http://localhost" })).statusCode).toBe(403);
+});

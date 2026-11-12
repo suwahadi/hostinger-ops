@@ -42,7 +42,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
 
   // Two separate doors: /v1 opens only with the internal API key (Claude), web pages only with a browser session.
   app.addHook("onRequest", async (request, reply) => {
-    const path = pathOf(request.url);
+    // Classify by the route the router matched, not the raw URL: the router decodes "%76%31" to "v1",
+    // so a raw-URL check would send an encoded /v1 request through the web door.
+    const path = request.routeOptions.url ?? pathOf(request.url);
     if (path === "/health") return;
     if (isApiPath(path)) {
       const presented = request.headers["x-api-key"];

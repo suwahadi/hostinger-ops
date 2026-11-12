@@ -54,9 +54,10 @@ export function webAuthRoutes({ db, sessions, throttle }: WebAuthDeps): FastifyP
         await audit(request, "locked");
         return sendLogin(reply, 429, "locked");
       }
+      // Counted before the slow hash check, so parallel guesses all hit the limit instead of slipping past it.
+      throttle.recordFailure();
       const password = typeof request.body?.password === "string" ? request.body.password : "";
       if (!(await verifyPassword(password, credential.passwordHash))) {
-        throttle.recordFailure();
         await audit(request, "wrong_password");
         return sendLogin(reply, 401, "wrong");
       }
