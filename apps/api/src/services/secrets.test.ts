@@ -48,3 +48,9 @@ test("adds a login, refuses a duplicate or malformed alias", async () => {
 test("defaultTokenRef turns dashes into underscores", () => {
   expect(defaultTokenRef("akun-dua")).toBe("HOSTINGER_TOKEN_AKUN_DUA");
 });
+
+test.each(["tok\u001b[Dabc", "tok\u0004abc", "tok\u001aabc", "tok abc"])("rejects a value with spaces or invisible characters %j", async (value) => {
+  await expect(storeSecret(db, key, { refKey: "HOSTINGER_TOKEN_X", value })).rejects.toThrow(
+    "Secret contains spaces or invisible characters; type or paste it again",
+  );
+});

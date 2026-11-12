@@ -69,3 +69,15 @@ test.each([
   const { client } = fakeClient({ "/api/hosting/v1/orders": result as HostingerResult });
   expect((await probeCapabilities(client))[0]).toEqual({ name: "hosting.orders.list", available: false, httpStatus, note });
 });
+
+test("stops probing once Hostinger keeps rate-limiting", async () => {
+  const { client, paths } = fakeClient({ "/api/hosting/v1/orders": { status: 429, error: null, body: null } });
+  const results = await probeCapabilities(client);
+  expect(paths).toEqual(["/api/hosting/v1/orders"]);
+  expect(results.map((r) => r.note)).toEqual([
+    "rate limited",
+    "skipped: rate limited",
+    "skipped: rate limited",
+    "skipped: rate limited",
+  ]);
+});

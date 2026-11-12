@@ -20,6 +20,8 @@ export async function storeSecret(
   validateRefKey(input.refKey);
   const value = input.value.trim();
   if (!value) throw new Error("Secret value is empty");
+  // The prompt hides input, so a stray arrow key or Ctrl+Z would otherwise be stored unseen and break every request.
+  if (!/^[\x21-\x7e]+$/.test(value)) throw new Error("Secret contains spaces or invisible characters; type or paste it again");
   const encrypted = encryptSecret(value, masterKey);
   const result = (await hasSecret(db, input.refKey)) ? "rotated" : "created";
   await db.$transaction([
