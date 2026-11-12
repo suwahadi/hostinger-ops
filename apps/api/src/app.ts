@@ -4,7 +4,11 @@ import { createRateLimiter, HOSTINGER_RATE_LIMIT, type RateLimiter, type Sleep }
 import { fastify, type FastifyInstance } from "fastify";
 import { inventoryRoutes } from "./routes/inventory.js";
 import { syncRoutes } from "./routes/sync.js";
+import { getUiCredential } from "./services/ui-password.js";
 import { verifyLogin } from "./services/verify-login.js";
+import { webAuthRoutes } from "./web/auth-routes.js";
+import { isAllowedHost, isSameOriginPost, readCookie, SECURITY_HEADERS, SESSION_COOKIE } from "./web/guard.js";
+import { createLoginThrottle, createSessionStore, type LoginThrottle, type SessionStore } from "./web/session.js";
 
 export type AppDeps = {
   db: PrismaClient;
@@ -14,21 +18,56 @@ export type AppDeps = {
   fetch?: typeof fetch;
   limiter?: RateLimiter;
   sleep?: Sleep;
+  sessions?: SessionStore;
+  throttle?: LoginThrottle;
 };
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest();
 
-export function buildApp({ db, apiKey, masterKey, logger = false, fetch, limiter, sleep }: AppDeps): FastifyInstance {
+const pathOf = (url: string) => url.split("?")[0]!;
+const isApiPath = (path: string) => path === "/health" || path === "/v1" || path.startsWith("/v1/");
+const isPublicWebPath = (path: string) => path === "/login" || path.startsWith("/assets/");
+
+export function buildApp(deps: AppDeps): FastifyInstance {
+  const { db, apiKey, masterKey, logger = false, fetch, limiter, sleep } = deps;
   const app = fastify({ logger, genReqId: () => randomUUID() });
   const expectedKey = sha256(apiKey);
   const hostingerLimiter = limiter ?? createRateLimiter(HOSTINGER_RATE_LIMIT);
+  const sessions = deps.sessions ?? createSessionStore();
+  const throttle = deps.throttle ?? createLoginThrottle();
 
+  app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string", bodyLimit: 16 * 1024 }, (_request, body, done) =>
+    done(null, Object.fromEntries(new URLSearchParams(body as string))),
+  );
+
+  // Two separate doors: /v1 opens only with the internal API key (Claude), web pages only with a browser session.
   app.addHook("onRequest", async (request, reply) => {
-    if (request.url === "/health") return;
-    const presented = request.headers["x-api-key"];
-    // Hashing first gives both sides equal length, so timingSafeEqual never throws on a short key.
-    if (typeof presented !== "string" || !timingSafeEqual(sha256(presented), expectedKey)) {
-      return reply.code(401).send({ error: "unauthorized" });
+    const path = pathOf(request.url);
+    if (path === "/health") return;
+    if (isApiPath(path)) {
+      const presented = request.headers["x-api-key"];
+      // Hashing first gives both sides equal length, so timingSafeEqual never throws on a short key.
+      if (typeof presented !== "string" || !timingSafeEqual(sha256(presented), expectedKey)) {
+        return reply.code(401).send({ error: "unauthorized" });
+      }
+      return;
+    }
+
+    reply.headers(SECURITY_HEADERS);
+    if (!isAllowedHost(request.headers.host)) return reply.code(421).type("text/plain").send("Misdirected request");
+    if (request.method === "POST" && !isSameOriginPost(request.headers)) {
+      return reply.code(403).type("text/plain").send("Forbidden");
+    }
+    if (isPublicWebPath(path)) return;
+
+    const token = readCookie(request.headers.cookie, SESSION_COOKIE);
+    const session = token ? sessions.get(token) : null;
+    const credential = session ? await getUiCredential(db) : null;
+    // A session that predates the current password belongs to the old password and is no longer valid.
+    if (!session || !credential || session.createdAt <= credential.updatedAt.getTime()) {
+      if (token) sessions.destroy(token);
+      if (request.method === "GET") return reply.redirect("/login", 302);
+      return reply.code(401).type("text/plain").send("Unauthorized");
     }
   });
 
@@ -51,5 +90,8 @@ export function buildApp({ db, apiKey, masterKey, logger = false, fetch, limiter
 
   app.register(inventoryRoutes(db, verify), { prefix: "/v1" });
   app.register(syncRoutes(db), { prefix: "/v1" });
+  app.register(webAuthRoutes({ db, sessions, throttle }));
+  // shortcut: placeholder until the dashboard pages land in the next task of the web plan.
+  app.get("/ringkasan", async (_request, reply) => reply.type("text/html; charset=utf-8").send("<!doctype html><title>Ringkasan</title>"));
   return app;
 }
