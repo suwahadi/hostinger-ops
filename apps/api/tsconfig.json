@@ -6,6 +6,7 @@
   "references": [
     { "path": "../../packages/shared" },
     { "path": "../../packages/database" },
-    { "path": "../../packages/hostinger-adapter" }
+    { "path": "../../packages/hostinger-adapter" },
+    { "path": "../worker" }
   ]
 }

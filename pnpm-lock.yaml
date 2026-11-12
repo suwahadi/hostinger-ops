@@ -29,6 +29,9 @@ importers:
       '@ops/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@ops/worker':
+        specifier: workspace:*
+        version: link:../worker
       fastify:
         specifier: ^5.12.0
         version: 5.12.8

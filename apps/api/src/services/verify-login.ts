@@ -7,7 +7,8 @@ import {
   type RateLimiter,
   type Sleep,
 } from "@ops/hostinger-adapter";
-import { CapabilitySummary, LoginSummary } from "@ops/shared";
+import { CapabilitySummary, type LoginSummary } from "@ops/shared";
+import { loginSummaries } from "./summaries.js";
 
 export type VerifyDeps = {
   db: PrismaClient;
@@ -88,9 +89,10 @@ export async function verifyLogin(deps: VerifyDeps, alias: string): Promise<Veri
     include: { capabilities: { orderBy: { name: "asc" } } },
   });
   await audit("LOGIN_VERIFY", status);
+  const [summary] = await loginSummaries(db, { id: login.id });
 
   return {
-    login: LoginSummary.parse({ ...updated, lastVerifiedAt: updated.lastVerifiedAt?.toISOString() ?? null }),
+    login: summary!,
     capabilities: updated.capabilities.map((c) => CapabilitySummary.parse({ ...c, checkedAt: c.checkedAt.toISOString() })),
     hint: hintFor(status, login.tokenRef),
   };

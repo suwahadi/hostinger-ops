@@ -4,7 +4,7 @@ export type RateLimiter = { acquire(key: string): Promise<void> };
 
 export const defaultSleep: Sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-// shortcut: the budget is shared only inside one process; move it to a shared store when the worker also calls Hostinger (M3).
+// In-memory is enough: the API and the worker run in one process (apps/api/src/server.ts) and share one limiter.
 export function createRateLimiter(opts: {
   limit: number;
   windowMs: number;

@@ -43,7 +43,7 @@ test.each([undefined, "short", "x".repeat(40), "k".repeat(41)])("rejects key %s 
 
 test("lists logins without token references", async () => {
   const res = await app.inject({ url: "/v1/logins", headers: auth });
-  expect(res.json().logins).toEqual([{ alias: "sumber", status: expect.any(String), lastVerifiedAt: null }]);
+  expect(res.json().logins).toEqual([{ alias: "sumber", status: expect.any(String), lastVerifiedAt: null, lastSyncedAt: null, sync: null }]);
   expect(res.body).not.toContain("HOSTINGER_TOKEN");
 });
 

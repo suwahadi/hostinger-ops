@@ -3,6 +3,7 @@ import type { PrismaClient } from "@ops/database";
 import { createRateLimiter, HOSTINGER_RATE_LIMIT, type RateLimiter, type Sleep } from "@ops/hostinger-adapter";
 import { fastify, type FastifyInstance } from "fastify";
 import { inventoryRoutes } from "./routes/inventory.js";
+import { syncRoutes } from "./routes/sync.js";
 import { verifyLogin } from "./services/verify-login.js";
 
 export type AppDeps = {
@@ -49,5 +50,6 @@ export function buildApp({ db, apiKey, masterKey, logger = false, fetch, limiter
     verifyLogin({ db, masterKey, limiter: hostingerLimiter, fetch, sleep, requestId }, alias);
 
   app.register(inventoryRoutes(db, verify), { prefix: "/v1" });
+  app.register(syncRoutes(db), { prefix: "/v1" });
   return app;
 }

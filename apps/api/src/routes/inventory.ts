@@ -1,12 +1,13 @@
 import type { PrismaClient } from "@ops/database";
-import { AccountSummary, CapabilitySummary, LoginSummary, WebsiteSummary } from "@ops/shared";
+import { CapabilitySummary, WebsiteDetail, WebsiteSummary } from "@ops/shared";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { z } from "zod";
+import { iso, loginSummaries, toAccountSummary } from "../services/summaries.js";
 import type { VerifyResult } from "../services/verify-login.js";
 
-const iso = (date: Date | null) => date?.toISOString() ?? null;
+const EXPIRING_WITHIN_MS = 30 * 24 * 60 * 60 * 1000;
 
-const AccountsQuery = z.object({ login: z.string().optional() });
+const LoginQuery = z.object({ login: z.string().optional() });
 const WebsitesQuery = z.object({
   login: z.string().optional(),
   account: z.string().optional(),
@@ -14,7 +15,7 @@ const WebsitesQuery = z.object({
   domain: z.string().optional(),
 });
 
-function parseQuery<T>(schema: z.ZodType<T>, query: unknown, reply: FastifyReply): T | undefined {
+export function parseQuery<T>(schema: z.ZodType<T>, query: unknown, reply: FastifyReply): T | undefined {
   const parsed = schema.safeParse(query);
   if (!parsed.success) reply.code(400).send({ error: "invalid_query" });
   return parsed.data;
@@ -31,24 +32,17 @@ export function inventoryRoutes(
       return result;
     });
 
-    app.get("/logins", async () => {
-      const logins = await db.hostingerLogin.findMany({ orderBy: { alias: "asc" } });
-      return { logins: logins.map((l) => LoginSummary.parse({ ...l, lastVerifiedAt: iso(l.lastVerifiedAt) })) };
-    });
+    app.get("/logins", async () => ({ logins: await loginSummaries(db) }));
 
     app.get("/accounts", async (request, reply) => {
-      const query = parseQuery(AccountsQuery, request.query, reply);
+      const query = parseQuery(LoginQuery, request.query, reply);
       if (!query) return reply;
       const accounts = await db.hostingAccount.findMany({
         where: query.login ? { login: { alias: query.login } } : {},
         include: { login: { select: { alias: true } } },
         orderBy: { code: "asc" },
       });
-      return {
-        accounts: accounts.map((a) =>
-          AccountSummary.parse({ ...a, loginAlias: a.login.alias, lastSyncedAt: iso(a.lastSyncedAt) }),
-        ),
-      };
+      return { accounts: accounts.map(toAccountSummary) };
     });
 
     app.get("/websites", async (request, reply) => {
@@ -67,6 +61,59 @@ export function inventoryRoutes(
         websites: websites.map((w) =>
           WebsiteSummary.parse({ ...w, accountCode: w.account.code, projectCode: w.project?.code ?? null }),
         ),
+      };
+    });
+
+    app.get<{ Params: { domain: string } }>("/websites/:domain", async (request, reply) => {
+      const websites = await db.website.findMany({
+        where: { domain: { equals: request.params.domain, mode: "insensitive" } },
+        include: {
+          account: { select: { code: true, login: { select: { alias: true } } } },
+          project: { select: { code: true } },
+        },
+        orderBy: { createdAt: "asc" },
+      });
+      if (websites.length === 0) return reply.code(404).send({ error: "website_not_found" });
+      return {
+        websites: websites.map((w) =>
+          WebsiteDetail.parse({
+            ...w,
+            accountCode: w.account.code,
+            loginAlias: w.account.login.alias,
+            projectCode: w.project?.code ?? null,
+            createdAt: w.createdAt.toISOString(),
+            updatedAt: w.updatedAt.toISOString(),
+          }),
+        ),
+      };
+    });
+
+    app.get("/capacity", async (request, reply) => {
+      const query = parseQuery(LoginQuery, request.query, reply);
+      if (!query) return reply;
+      const logins = await db.hostingerLogin.findMany({
+        where: query.login ? { alias: query.login } : {},
+        include: { accounts: { include: { login: { select: { alias: true } } } } },
+        orderBy: { alias: "asc" },
+      });
+      const fewestWebsitesFirst = (a: { websiteCount: number | null }, b: { websiteCount: number | null }) =>
+        (a.websiteCount ?? Infinity) - (b.websiteCount ?? Infinity);
+      const deadline = Date.now() + EXPIRING_WITHIN_MS;
+      const accounts = logins.flatMap((l) => l.accounts);
+      return {
+        logins: logins.map((login) => ({
+          alias: login.alias,
+          totals: {
+            accounts: login.accounts.length,
+            websites: login.accounts.reduce((sum, a) => sum + (a.websiteCount ?? 0), 0),
+          },
+          accounts: [...login.accounts].sort(fewestWebsitesFirst).map(toAccountSummary),
+        })),
+        // Already-expired plans are included: they are the most urgent ones.
+        expiringSoon: accounts
+          .filter((a) => a.expiresAt && a.expiresAt.getTime() <= deadline)
+          .sort((a, b) => a.expiresAt!.getTime() - b.expiresAt!.getTime())
+          .map(toAccountSummary),
       };
     });
 
