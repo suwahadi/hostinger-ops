@@ -36,9 +36,8 @@ const LOGOS: Record<string, { label: string; viewBox: string; body: string }> = 
   },
 };
 
-// Hostinger reports Node.js apps as website_type "nodejs"; the stored type has no Node.js value, so it stays UNKNOWN.
-export function typeLogo(websiteType: string, providerType: unknown): SafeHtml | null {
-  const logo = LOGOS[websiteType === "UNKNOWN" && providerType === "nodejs" ? "NODEJS" : websiteType];
+export function typeLogo(websiteType: string): SafeHtml | null {
+  const logo = LOGOS[websiteType];
   if (!logo) return null;
   return new SafeHtml(
     `<svg class="type-logo" viewBox="${logo.viewBox}" width="22" height="22" role="img" aria-label="${logo.label}" focusable="false"><title>${logo.label}</title>${logo.body}</svg>`,

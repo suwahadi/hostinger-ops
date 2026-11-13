@@ -244,3 +244,32 @@ test("a failing domain list does not fail the inventory sync", async () => {
   expect(result).toMatchObject({ accounts: 1, websites: 1, domains: null });
   expect((await db.domain.findUniqueOrThrow({ where: { name: "ganda.com" } })).expiresAt).toEqual(new Date("2027-03-12T00:00:00Z"));
 });
+
+test("Node.js apps get their own type from Hostinger, and a type recognised from the files survives a later sync", async () => {
+  await syncLoginInventory(
+    deps(
+      hostinger({
+        orders: [{ id: 102, status: "active", plan: { name: "Business" } }],
+        subscriptions: [],
+        websites: [
+          { domain: "node-app.com", order_id: 102, website_type: "nodejs", is_enabled: true },
+          { domain: "laravel-app.com", order_id: 102, website_type: "other", is_enabled: true },
+        ],
+      }),
+    ),
+    job(),
+  );
+  expect((await db.website.findFirstOrThrow({ where: { domain: "node-app.com" } })).websiteType).toBe("NODEJS");
+  await db.website.updateMany({ where: { domain: "laravel-app.com" }, data: { websiteType: "LARAVEL" } });
+  await syncLoginInventory(
+    deps(
+      hostinger({
+        orders: [{ id: 102, status: "active", plan: { name: "Business" } }],
+        subscriptions: [],
+        websites: [{ domain: "laravel-app.com", order_id: 102, website_type: "other", is_enabled: true }],
+      }),
+    ),
+    job(),
+  );
+  expect((await db.website.findFirstOrThrow({ where: { domain: "laravel-app.com" } })).websiteType).toBe("LARAVEL");
+});

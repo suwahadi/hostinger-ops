@@ -54,7 +54,7 @@ test("the job reads each unrecognised website's document root and stores the typ
       { accountId: account.id, domain: "statis-contoh.com", metadata: { provider: { websiteType: "other" } } },
       { accountId: account.id, domain: "gagal-contoh.com", metadata: { provider: { websiteType: "other" } } },
       { accountId: account.id, domain: "wp-contoh.com", websiteType: "WORDPRESS", metadata: { provider: { websiteType: "wordpress" } } },
-      { accountId: account.id, domain: "node-contoh.com", metadata: { provider: { websiteType: "nodejs" } } },
+      { accountId: account.id, domain: "node-contoh.com", websiteType: "NODEJS", metadata: { provider: { websiteType: "nodejs" } } },
       { accountId: account.id, domain: "hilang-contoh.com", status: "UNKNOWN" },
     ],
   });

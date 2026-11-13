@@ -69,7 +69,7 @@ export function webActions(deps: {
         count === 0
           ? `Website ${domain || "(kosong)"} tidak ditemukan.`
           : mode === "kecualikan"
-            ? `${domain} dikecualikan dari daftar dan pencarian. Halamannya tetap bisa dibuka lewat tautan "Lihat" di halaman Website.`
+            ? `${domain} dikecualikan dari daftar dan pencarian. Halaman ini hanya bisa dibuka lagi lewat alamatnya langsung.`
             : `${domain} tampil lagi di daftar.`;
       return reply.redirect(withMessage(back, message), 303);
     });

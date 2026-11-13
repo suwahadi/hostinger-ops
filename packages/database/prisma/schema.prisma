@@ -27,6 +27,7 @@ enum WebsiteType {
   LARAVEL
   CUSTOM_PHP
   STATIC
+  NODEJS
   UNKNOWN
 }
 

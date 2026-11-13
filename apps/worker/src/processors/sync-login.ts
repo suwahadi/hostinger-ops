@@ -206,7 +206,9 @@ export async function syncLoginInventory(deps: SyncDeps, job: JobRow): Promise<S
           accountId: accountIdByOrder.get(website.order_id)!,
           webRoot: website.root_directory ?? null,
           status: website.is_enabled === false ? "SUSPENDED" : "ACTIVE",
+          // Only types Hostinger itself names are written; anything else keeps what the file check recognised.
           ...(website.website_type === "wordpress" ? { websiteType: "WORDPRESS" as const } : {}),
+          ...(website.website_type === "nodejs" ? { websiteType: "NODEJS" as const } : {}),
           metadata: { ...asObject(old?.metadata), provider } as Prisma.InputJsonObject,
         };
         const row = old

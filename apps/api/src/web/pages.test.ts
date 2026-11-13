@@ -294,7 +294,7 @@ test("website type is shown as a coloured logo only, named for screen readers; u
       { accountId: account.id, domain: "jenis-laravel.com", websiteType: "LARAVEL" },
       { accountId: account.id, domain: "jenis-php.com", websiteType: "CUSTOM_PHP" },
       { accountId: account.id, domain: "jenis-statis.com", websiteType: "STATIC" },
-      { accountId: account.id, domain: "jenis-node.com", metadata: { provider: { websiteType: "nodejs" } } },
+      { accountId: account.id, domain: "jenis-node.com", websiteType: "NODEJS", metadata: { provider: { websiteType: "nodejs" } } },
       { accountId: account.id, domain: "jenis-lain.com", metadata: { provider: { websiteType: "other" } } },
     ],
   });
@@ -424,12 +424,22 @@ test("an excluded website is left out of the list, search and its plan's list, y
   await db.website.create({ data: { accountId: account.id, domain: "dikecualikan-contoh.com", excludedAt: new Date("2026-11-13T05:00:00Z") } });
   expect((await page("/website?q=dikecualikan")).body).not.toContain(">dikecualikan-contoh.com</a>");
   expect((await page("/website?username=u111")).body).not.toContain(">dikecualikan-contoh.com</a>");
-  const list = (await page("/website")).body;
-  expect(list).toContain('1 website dikecualikan dari daftar dan pencarian. <a href="/website?dikecualikan=1">Lihat</a>');
-  expect((await page("/website?dikecualikan=1")).body).toContain(">dikecualikan-contoh.com</a>");
+  for (const url of ["/website", "/website?dikecualikan=1"]) {
+    const list = (await page(url)).body;
+    expect(list).not.toContain("dikecualikan-contoh.com");
+    expect(list).not.toContain("dikecualikan dari daftar");
+  }
   const detail = await page("/website/dikecualikan-contoh.com");
   expect(detail.statusCode).toBe(200);
   expect(detail.body).toContain("Website ini dikecualikan dari daftar dan pencarian sejak 13 Nov 2026.");
   expect(detail.body).toMatch(/<form method="post" action="\/aksi\/kecualikan" class="inline-form"><input type="hidden" name="domain" value="dikecualikan-contoh.com"><input type="hidden" name="mode" value="tampilkan">/);
-  expect((await page("/website/contoh.com")).body).toContain('<input type="hidden" name="mode" value="kecualikan">');
+  expect((await page("/website/contoh.com")).body).not.toContain('action="/aksi/kecualikan"');
+});
+
+test("the Jenis filter offers Node.js and lists only Node.js websites, which are no longer 'Belum dikenali'", async () => {
+  const body = (await page("/website?jenis=NODEJS&q=jenis-")).body;
+  expect(body).toContain('<option value="NODEJS" selected>Node.js</option>');
+  expect(body).toContain(">jenis-node.com</a>");
+  expect(body).not.toContain(">jenis-lain.com</a>");
+  expect((await page("/website?jenis=UNKNOWN&q=jenis-")).body).not.toContain(">jenis-node.com</a>");
 });

@@ -104,8 +104,6 @@ export async function detectWebsiteTypes(deps: DetectDeps, job: JobRow) {
   const counts = { checked: 0, laravel: 0, wordpress: 0, php: 0, static: 0, unknown: 0, errors: 0 };
   const tally: Record<DetectedType, keyof typeof counts> = { LARAVEL: "laravel", WORDPRESS: "wordpress", CUSTOM_PHP: "php", STATIC: "static", UNKNOWN: "unknown" };
   for (const site of sites) {
-    // Hostinger already names Node.js apps; only its catch-all "other" (or no type at all) is worth a look.
-    if (asObject(asObject(site.metadata).provider).websiteType === "nodejs") continue;
     const login = site.account.login ?? site.account.access[0]?.login ?? null;
     const client = login ? await clientFor(login) : null;
     const detection: Detection =

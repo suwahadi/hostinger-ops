@@ -21,19 +21,20 @@ const externalLink = (domain: string) =>
     : "";
 const URGENT_DAYS = 7;
 const EXPIRING_WITHIN_MS = 30 * 24 * 60 * 60 * 1000;
-const WEBSITE_TYPES = ["WORDPRESS", "LARAVEL", "CUSTOM_PHP", "STATIC", "UNKNOWN"] as const;
+const WEBSITE_TYPES = ["WORDPRESS", "LARAVEL", "CUSTOM_PHP", "STATIC", "NODEJS", "UNKNOWN"] as const;
 const WEBSITE_STATUSES = ["ACTIVE", "SUSPENDED", "UNKNOWN"] as const;
 const TYPE_LABELS: Record<string, string> = {
   WORDPRESS: "WordPress",
   LARAVEL: "Laravel",
   CUSTOM_PHP: "PHP lain",
   STATIC: "Statis",
+  NODEJS: "Node.js",
   UNKNOWN: "Belum dikenali",
 };
 const providerOf = (metadata: unknown) =>
   ((metadata as { provider?: Record<string, unknown> } | null)?.provider ?? {}) as Record<string, unknown>;
-const websiteKind = (websiteType: string, metadata: unknown) =>
-  typeLogo(websiteType, providerOf(metadata).websiteType) ?? html`<span class="muted">${TYPE_LABELS[websiteType] ?? websiteType}</span>`;
+const websiteKind = (websiteType: string) =>
+  typeLogo(websiteType) ?? html`<span class="muted">${TYPE_LABELS[websiteType] ?? websiteType}</span>`;
 const ACTOR_LABELS: Record<string, string> = { CLAUDE_MCP: "Claude", CLI_HUMAN: "Terminal", WORKER: "Worker", WEB_HUMAN: "Web" };
 
 type Query = Record<string, string | undefined>;
@@ -197,17 +198,16 @@ async function website(db: PrismaClient, query: Query) {
   const hal = pageNumber(query.hal);
   // Hostinger usernames are lowercase (u123456789), so an exact lowercase match avoids ILIKE wildcards.
   const username = text(query.username).toLowerCase();
-  const showExcluded = query.dikecualikan === "1";
   const aliases = (await db.hostingerLogin.findMany({ orderBy: { alias: "asc" }, select: { alias: true } })).map((l) => l.alias);
   const where: Prisma.WebsiteWhereInput = {
-    excludedAt: showExcluded ? { not: null } : null,
+    excludedAt: null,
     ...(q ? { domain: { contains: escapeLike(q), mode: "insensitive" } } : {}),
     status: status ?? { not: "UNKNOWN" },
     ...(jenis ? { websiteType: jenis } : {}),
     ...(login || username ? { account: { ...(login ? accessibleBy(login) : {}), ...(username ? { username } : {}) } } : {}),
   };
   const planPanel = username ? await planPanels(db, username) : "";
-  const [total, rows, excludedCount] = await Promise.all([
+  const [total, rows] = await Promise.all([
     db.website.count({ where }),
     db.website.findMany({
       where,
@@ -216,21 +216,15 @@ async function website(db: PrismaClient, query: Query) {
       skip: (hal - 1) * PAGE_SIZE,
       take: PAGE_SIZE,
     }),
-    db.website.count({ where: { excludedAt: { not: null } } }),
   ]);
   const lastPage = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const linkTo = (page: number) =>
-    `/website?${new URLSearchParams({ q, username, login, jenis: jenis ?? "", status: status ?? "", ...(showExcluded ? { dikecualikan: "1" } : {}), hal: String(page) })}`;
-  const exclusionNote = showExcluded
-    ? html`<p class="lead">Menampilkan website yang dikecualikan dari daftar dan pencarian. <a href="/website">Kembali ke daftar biasa</a></p>`
-    : excludedCount
-      ? html`<p class="lead">${formatCount(excludedCount)} website dikecualikan dari daftar dan pencarian. <a href="/website?dikecualikan=1">Lihat</a></p>`
-      : "";
+    `/website?${new URLSearchParams({ q, username, login, jenis: jenis ?? "", status: status ?? "", hal: String(page) })}`;
   const option = (value: string, label: string, selected: string | undefined) =>
     html`<option value="${value}"${value === (selected ?? "") ? html` selected` : ""}>${label}</option>`;
   const body = rows.map(
     (w) =>
-      html`<tr data-row="website"><th scope="row"><a href="/website/${encodeURIComponent(w.domain)}">${w.domain}</a>${externalLink(w.domain)}</th><td>${websiteKind(w.websiteType, w.metadata)}</td><td${w.status === "ACTIVE" ? "" : html` class="urgent"`}>${w.status}</td><td>${usernameLink(w.account.username)}</td><td>${w.account.login.alias}</td><td><span class="path">${w.webRoot ?? ""}</span></td></tr>`,
+      html`<tr data-row="website"><th scope="row"><a href="/website/${encodeURIComponent(w.domain)}">${w.domain}</a>${externalLink(w.domain)}</th><td>${websiteKind(w.websiteType)}</td><td${w.status === "ACTIVE" ? "" : html` class="urgent"`}>${w.status}</td><td>${usernameLink(w.account.username)}</td><td>${w.account.login.alias}</td><td><span class="path">${w.webRoot ?? ""}</span></td></tr>`,
   );
   const results =
     total === 0
@@ -254,8 +248,7 @@ ${pager(hal, lastPage, linkTo)}`;
 <button type="submit">Cari</button>
 </form>
 ${planPanel}
-${results}
-${exclusionNote}`;
+${results}`;
 }
 
 async function planPanels(db: PrismaClient, username: string) {
@@ -317,7 +310,10 @@ async function websiteDetail(db: PrismaClient, domain: string) {
   const notice = excludedAt
     ? html`<p class="notice" role="status">Website ini dikecualikan dari daftar dan pencarian sejak ${formatDate(excludedAt)}.</p>`
     : "";
-  const actions = html`<div class="back-row"><a class="back-link" href="/website" data-back>${icon("chevron-left")}<span>Kembali</span></a><form method="post" action="/aksi/kecualikan" class="inline-form"><input type="hidden" name="domain" value="${domainName}"><input type="hidden" name="mode" value="${excludedAt ? "tampilkan" : "kecualikan"}"><input type="hidden" name="kembali" value="/website/${encodeURIComponent(domainName)}"><button type="submit" class="secondary">${excludedAt ? "Tampilkan lagi di daftar" : "Kecualikan dari daftar"}</button></form></div>`;
+  const restore = excludedAt
+    ? html`<form method="post" action="/aksi/kecualikan" class="inline-form"><input type="hidden" name="domain" value="${domainName}"><input type="hidden" name="mode" value="tampilkan"><input type="hidden" name="kembali" value="/website/${encodeURIComponent(domainName)}"><button type="submit" class="secondary">Tampilkan lagi di daftar</button></form>`
+    : "";
+  const actions = html`<div class="back-row"><a class="back-link" href="/website" data-back>${icon("chevron-left")}<span>Kembali</span></a>${restore}</div>`;
   const sections = rows.map((w) => {
     const check =
       !temporary && isPlainHostname(w.domain)
@@ -327,7 +323,7 @@ async function websiteDetail(db: PrismaClient, domain: string) {
     const field = (label: string, value: unknown, className = "") =>
       html`<dt>${label}</dt><dd${className ? html` class="${className}"` : ""}>${value === null || value === undefined || value === "" ? "tidak diketahui" : String(value)}</dd>`;
     return html`<h2 class="domain-title">${w.domain}${externalLink(w.domain)}</h2><dl class="detail">
-${field("Status", w.status)}<dt>Jenis</dt><dd>${websiteKind(w.websiteType, w.metadata)}</dd>${field("Jenis di Hostinger", provider.websiteType)}
+${field("Status", w.status)}<dt>Jenis</dt><dd>${websiteKind(w.websiteType)}</dd>${field("Jenis di Hostinger", provider.websiteType)}
 ${field("Kode order", w.account.code, "code")}${field("Paket", w.account.planType)}${field("Username", w.account.username, "code")}
 ${field("Login pemilik", w.account.login.alias)}${field("Bisa diakses dari", w.account.access.map((a) => a.login.alias).join(", "))}
 ${field("Folder web", w.webRoot, "path")}${field("Jenis vhost", provider.vhostType)}${field("Domain induk", provider.parentDomain)}
@@ -389,9 +385,7 @@ async function sinkron(db: PrismaClient, query: Query) {
       take: 50,
     }),
     expiryGaps(db),
-    db.website
-      .findMany({ where: { websiteType: "UNKNOWN", status: { not: "UNKNOWN" } }, select: { metadata: true } })
-      .then((rows) => rows.filter((r) => providerOf(r.metadata).websiteType !== "nodejs").length),
+    db.website.count({ where: { websiteType: "UNKNOWN", status: { not: "UNKNOWN" } } }),
   ]);
   const jobLogin = (payload: unknown) => {
     const loginId = (payload as { loginId?: unknown } | null)?.loginId;
