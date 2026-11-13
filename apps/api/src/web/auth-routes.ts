@@ -18,7 +18,8 @@ const MESSAGES: Record<LoginState, string> = {
 };
 
 export function loginPage(state: LoginState): string {
-  const message = MESSAGES[state] ? `<p class="notice" role="alert">${MESSAGES[state]}</p>` : "";
+  const failed = state === "wrong" || state === "locked";
+  const message = MESSAGES[state] ? `<p class="notice${failed ? " notice-error" : ""}" role="alert">${MESSAGES[state]}</p>` : "";
   const formHtml =
     state === "setup"
       ? ""

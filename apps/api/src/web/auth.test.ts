@@ -38,6 +38,7 @@ test("before any password exists /login explains ops:ui:password", async () => {
   const res = await app.inject({ url: "/login", headers: { host: "127.0.0.1:3000" } });
   expect(res.statusCode).toBe(200);
   expect(res.body).toContain("ops:ui:password");
+  expect(res.body).toContain('<p class="notice" role="alert">');
 });
 
 test("without a session GET goes to /login and POST is 401", async () => {
@@ -67,7 +68,7 @@ test("wrong password stays on /login with 401 and audits wrong_password", async 
   const res = await postLogin(app, "salah sekali bukan ini");
   expect(res.statusCode).toBe(401);
   expect(res.headers["set-cookie"]).toBeUndefined();
-  expect(res.body).toContain("Password salah");
+  expect(res.body).toContain('<p class="notice notice-error" role="alert">Password salah.</p>');
   const audit = await db.auditLog.findMany({ where: { action: "UI_LOGIN", result: "wrong_password" } });
   expect(audit).toHaveLength(1);
   expect(JSON.stringify(audit)).not.toContain("salah sekali");
@@ -79,6 +80,7 @@ test("the sixth failure in 15 minutes is locked with 429", async () => {
   const sixth = await postLogin(locked, password);
   expect(sixth.statusCode).toBe(429);
   expect(sixth.headers["set-cookie"]).toBeUndefined();
+  expect(sixth.body).toContain('<p class="notice notice-error" role="alert">Terlalu banyak percobaan');
 });
 
 test("a session cookie does not open /v1/logins and an api key does not open /ringkasan", async () => {

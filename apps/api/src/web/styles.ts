@@ -1,5 +1,6 @@
 // Served from code rather than a file so dist/ needs no copy step. Colour pairs were checked with the antislop
-// contrast script: ink/paper 13.9, muted/paper 6.4, white/pine 7.8, brick/paper 5.8, input border/white 4.5.
+// contrast script: ink/paper 13.9, muted/paper 6.4, white/pine 7.8, brick/paper 5.8, input border/white 4.5,
+// danger/danger-soft 8.0, danger border/danger-soft 5.7.
 export const APP_CSS = `
 :root {
   --ink: #1c2430;
@@ -11,6 +12,9 @@ export const APP_CSS = `
   --pine: #1f5c49;
   --pine-soft: #e9f1ee;
   --brick: #a63b12;
+  --danger: #8c1d18;
+  --danger-soft: #fdeceb;
+  --danger-line: #b3261e;
   --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
   color-scheme: light;
 }
@@ -48,6 +52,7 @@ h1 { font-size: 1.5rem; margin: 0 0 1rem; }
 h2 { font-size: 1.1rem; margin: 2rem 0 0.25rem; }
 .lead { margin: 0 0 0.75rem; color: var(--muted); }
 .notice { background: var(--pine-soft); border: 1px solid var(--pine); border-radius: 6px; padding: 0.6rem 0.9rem; margin: 0 0 1rem; }
+.notice-error { background: var(--danger-soft); border-color: var(--danger-line); color: var(--danger); }
 .empty { color: var(--muted); margin: 0.75rem 0; }
 
 .stats { display: flex; flex-wrap: wrap; margin: 0 0 0.5rem; padding: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
