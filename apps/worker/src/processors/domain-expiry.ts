@@ -27,6 +27,7 @@ export type ExpiryCheck =
   | { outcome: "found"; domain: string; expiresAt: Date; source: "HOSTINGER" | "RDAP" }
   | { outcome: "temporary" }
   | { outcome: "invalid" }
+  | { outcome: "not_registered"; domain: string }
   | { outcome: "not_found" }
   | { outcome: "error"; reason: string };
 
@@ -59,11 +60,19 @@ export async function checkDomainExpiry(deps: ExpiryDeps, domain: string): Promi
   const audit = (action: string, result: string, detail?: object) =>
     db.auditLog.create({ data: { requestId: deps.requestId, actor: deps.actor, action, resource: "domain", resourceId: name, result, detail } });
   const finish = async (check: ExpiryCheck) => {
-    const detail = check.outcome === "found" ? { domain: check.domain, source: check.source } : check.outcome === "error" ? { reason: check.reason } : undefined;
+    const detail =
+      check.outcome === "found"
+        ? { domain: check.domain, source: check.source }
+        : check.outcome === "not_registered"
+          ? { domain: check.domain }
+          : check.outcome === "error"
+            ? { reason: check.reason }
+            : undefined;
     await audit("DOMAIN_EXPIRY_CHECK", check.outcome, detail);
     return check;
   };
-  const save = (registered: string, expiresAt: Date, source: "HOSTINGER" | "RDAP", status?: string | null) => {
+  // expiresAt null with source RDAP records the registry's answer that the name is not registered.
+  const save = (registered: string, expiresAt: Date | null, source: "HOSTINGER" | "RDAP", status?: string | null) => {
     const data = { expiresAt, expirySource: source, expiryCheckedAt: new Date(), ...(status ? { status } : {}) };
     return db.domain.upsert({ where: { name: registered }, create: { name: registered, ...data }, update: data });
   };
@@ -93,9 +102,12 @@ export async function checkDomainExpiry(deps: ExpiryDeps, domain: string): Promi
       return finish({ outcome: "found", domain: candidate, expiresAt: answer.expiresAt, source: "RDAP" });
     }
     if (answer.kind === "error") return finish({ outcome: "error", reason: `${answer.server ?? "RDAP"}: ${answer.reason}` });
-    if (answer.kind !== "not_found") break;
+    if (answer.kind !== "not_found") return finish({ outcome: "not_found" });
   }
-  return finish({ outcome: "not_found" });
+  // Every level, down to the registrable name, came back 404 from the registry that runs the TLD.
+  const registrable = candidates.at(-1)!;
+  await save(registrable, null, "RDAP");
+  return finish({ outcome: "not_registered", domain: registrable });
 }
 
 async function hostingerExpiry(
@@ -137,29 +149,39 @@ async function hostingerExpiry(
   return expiresAt ? { expiresAt, status: parsed.data?.status ?? null } : null;
 }
 
-export async function domainsWithoutExpiry(db: PrismaClient): Promise<string[]> {
-  const [websites, dated] = await Promise.all([
+export async function expiryGaps(db: PrismaClient): Promise<{ unknown: string[]; notRegistered: string[] }> {
+  const [websites, rows] = await Promise.all([
     db.website.findMany({ where: { status: { not: "UNKNOWN" } }, select: { domain: true } }),
-    db.domain.findMany({ where: { expiresAt: { not: null } }, select: { name: true } }),
+    db.domain.findMany({
+      where: { OR: [{ expiresAt: { not: null } }, { expirySource: "RDAP", expiryCheckedAt: { not: null } }] },
+      select: { name: true, expiresAt: true },
+    }),
   ]);
-  const known = new Set(dated.map((d) => d.name));
-  return [...new Set(websites.map((w) => w.domain.toLowerCase()))]
-    .filter((d) => isPlainHostname(d) && !isTemporaryHostname(d) && !registrableCandidates(d).some((c) => known.has(c)))
-    .sort();
+  const dated = new Set(rows.filter((r) => r.expiresAt).map((r) => r.name));
+  const unregistered = new Set(rows.filter((r) => !r.expiresAt).map((r) => r.name));
+  const gaps = { unknown: [] as string[], notRegistered: [] as string[] };
+  for (const domain of [...new Set(websites.map((w) => w.domain.toLowerCase()))].sort()) {
+    if (!isPlainHostname(domain) || isTemporaryHostname(domain)) continue;
+    const candidates = registrableCandidates(domain);
+    if (candidates.some((c) => dated.has(c))) continue;
+    if (candidates.some((c) => unregistered.has(c))) gaps.notRegistered.push(domain);
+    else gaps.unknown.push(domain);
+  }
+  return gaps;
 }
 
 export async function checkDomainExpiries(deps: Omit<ExpiryDeps, "requestId" | "actor">, job: JobRow) {
   const sleep = deps.sleep ?? defaultSleep;
-  const pending = await domainsWithoutExpiry(deps.db);
+  const pending = (await expiryGaps(deps.db)).unknown;
   const found = new Set<string>();
-  const counts = { pending: pending.length, checked: 0, found: 0, notFound: 0, errors: 0 };
+  const counts = { pending: pending.length, checked: 0, found: 0, notRegistered: 0, notFound: 0, errors: 0 };
   for (const domain of pending) {
     if (registrableCandidates(domain).some((c) => found.has(c))) continue;
     if (counts.checked > 0) await sleep(BULK_PAUSE_MS);
     const check = await checkDomainExpiry({ ...deps, requestId: job.id, actor: "WORKER" }, domain);
     counts.checked++;
-    if (check.outcome === "found") {
-      counts.found++;
+    if (check.outcome === "found" || check.outcome === "not_registered") {
+      counts[check.outcome === "found" ? "found" : "notRegistered"]++;
       found.add(check.domain);
     } else if (check.outcome === "error") counts.errors++;
     else counts.notFound++;

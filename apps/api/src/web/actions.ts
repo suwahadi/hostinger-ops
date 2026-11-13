@@ -24,6 +24,8 @@ function expiryMessage(domain: string, check: ExpiryCheck): string {
       return `${domain} adalah alamat sementara Hostinger dan tidak punya tanggal kedaluwarsa.`;
     case "invalid":
       return `${domain || "(kosong)"} bukan nama domain yang bisa dicek.`;
+    case "not_registered":
+      return `${check.domain} tidak terdaftar di registry domain: kemungkinan sudah kedaluwarsa lalu dilepas, atau belum pernah didaftarkan.`;
     case "not_found":
       return `Tanggal kedaluwarsa ${domain} tidak ditemukan di Hostinger maupun di registry domain.`;
     case "error":

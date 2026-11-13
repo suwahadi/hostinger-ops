@@ -3,7 +3,7 @@ import { createTestDb } from "@ops/database/test-db";
 import { encryptSecret, parseMasterKey } from "@ops/shared";
 import { afterAll, expect, test, vi } from "vitest";
 import type { RdapAnswer } from "../rdap.js";
-import { checkDomainExpiries, checkDomainExpiry, domainsWithoutExpiry, registrableCandidates } from "./domain-expiry.js";
+import { checkDomainExpiries, checkDomainExpiry, expiryGaps, registrableCandidates } from "./domain-expiry.js";
 
 const db = await createTestDb();
 const key = parseMasterKey("ab".repeat(32));
@@ -85,11 +85,22 @@ test("temporary Hostinger addresses and odd names are never looked up", async ()
   expect(rdap.lookup).not.toHaveBeenCalled();
 });
 
-test("a registry error is reported and nothing is stored; nothing found anywhere is not_found", async () => {
+test("a registry error is reported and nothing is stored; a TLD without RDAP is not_found", async () => {
   const failing = registry({ "sibuk.com": { kind: "error", server: "rdap.test", reason: "HTTP 503" } });
   expect(await checkDomainExpiry(deps(hostingerRenewal({}), failing), "sibuk.com")).toEqual({ outcome: "error", reason: "rdap.test: HTTP 503" });
   expect(await db.domain.findUnique({ where: { name: "sibuk.com" } })).toBeNull();
-  expect(await checkDomainExpiry(deps(hostingerRenewal({}), registry({})), "kosong.com")).toEqual({ outcome: "not_found" });
+  const noRdap = registry({ "contoh.antah": { kind: "unsupported" } });
+  expect(await checkDomainExpiry(deps(hostingerRenewal({}), noRdap), "contoh.antah")).toEqual({ outcome: "not_found" });
+  expect(await db.domain.findUnique({ where: { name: "contoh.antah" } })).toBeNull();
+});
+
+test("a name the registry does not know at any level is recorded as not registered, replacing a stale date", async () => {
+  await db.domain.create({ data: { name: "lepas.com", expiresAt: new Date("2025-01-01T00:00:00Z"), expirySource: "HOSTINGER" } });
+  const check = await checkDomainExpiry(deps(hostingerRenewal({}), registry({})), "www.lepas.com");
+  expect(check).toEqual({ outcome: "not_registered", domain: "lepas.com" });
+  const row = await db.domain.findUniqueOrThrow({ where: { name: "lepas.com" } });
+  expect(row).toMatchObject({ expiresAt: null, expirySource: "RDAP" });
+  expect(row.expiryCheckedAt).toBeInstanceOf(Date);
 });
 
 test("the bulk job checks each website without a date once per registered domain, pausing between checks", async () => {
@@ -102,12 +113,15 @@ test("the bulk job checks each website without a date once per registered domain
       { accountId: account.id, domain: "b.dobel.com" },
       { accountId: account.id, domain: "coba.hostingersite.com" },
       { accountId: account.id, domain: "hilang.com", status: "UNKNOWN" },
+      { accountId: account.id, domain: "lepas.com" },
     ],
   });
-  const pending = await domainsWithoutExpiry(db);
+  const gaps = await expiryGaps(db);
+  const pending = gaps.unknown;
   expect(pending).toEqual(expect.arrayContaining(["a.dobel.com", "b.dobel.com"]));
   expect(pending).not.toEqual(expect.arrayContaining(["punya.com"]));
-  expect(pending.some((d) => d.endsWith("hostingersite.com") || d === "hilang.com")).toBe(false);
+  expect(pending.some((d) => d.endsWith("hostingersite.com") || d === "hilang.com" || d === "lepas.com")).toBe(false);
+  expect(gaps.notRegistered).toEqual(["lepas.com"]);
 
   const rdap = registry({ "dobel.com": { kind: "found", expiresAt: new Date("2027-03-03T00:00:00Z"), server: "rdap.test" } });
   const sleep = vi.fn(async () => {});

@@ -217,6 +217,7 @@ Nama kolom persis, indeks, dan relasi diserahkan ke builder, dengan syarat: upse
 
 - Sumber pertama Hostinger: daftar domain (`GET /api/domains/v1/portfolio`) saat sinkronisasi, lalu `GET /api/domains/v1/portfolio/{domain}/renewal` untuk domain di akun yang tanggalnya kosong. Tanggal yang sudah ada tidak dihapus bila Hostinger mengirim domain tanpa tanggal.
 - Domain di luar akun yang terhubung: RDAP di registry pengelolanya (misalnya Verisign untuk .com, PANDI untuk .id dan .co.id), dicari lewat daftar resmi IANA (`data.iana.org/rdap/dns.json`), hanya lewat HTTPS. Ini satu-satunya layanan luar selain Hostinger yang dipakai sistem. Yang dikirim hanya nama domain, tanpa token, login, atau data lain.
+- Bila registry menjawab nama itu tidak terdaftar sampai ke tingkat domain utamanya, jawaban itu disimpan dan halaman detail menandainya merah: website berjalan dengan domain yang sudah lepas atau belum pernah didaftarkan.
 - Alamat sementara Hostinger (`*.hostingersite.com`) tidak dicek.
 - Pengecekan dipicu pemilik: tombol "Cek" per website, atau satu tombol untuk semua yang belum diketahui (job antrean, satu domain per detik). Setiap pengecekan masuk `AuditLog`.
 

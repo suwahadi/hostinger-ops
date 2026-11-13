@@ -128,7 +128,7 @@ test("Cek explains temporary addresses, odd names and dates found nowhere in pla
   const say = async (domain: string) => messageOf((await postWithRegistry("/aksi/cek-domain", { domain, kembali: "/website" })).headers.location);
   expect(await say("coba.hostingersite.com")).toContain("alamat sementara Hostinger");
   expect(await say("x@evil.com")).toContain("bukan nama domain yang bisa dicek");
-  expect(await say("tidak-ketemu.com")).toContain("tidak ditemukan di Hostinger maupun di registry domain");
+  expect(await say("tidak-ketemu.com")).toContain("tidak-ketemu.com tidak terdaftar di registry domain");
 });
 
 test("Cek semua queues one bulk job; a second press does not add another", async () => {

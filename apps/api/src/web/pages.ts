@@ -1,6 +1,6 @@
 import type { Prisma, PrismaClient } from "@ops/database";
 import { isPlainHostname } from "@ops/shared";
-import { domainsWithoutExpiry, isTemporaryHostname } from "@ops/worker";
+import { expiryGaps, isTemporaryHostname } from "@ops/worker";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { inventoryTotals, listPlans, type PlanRow, type PlanSort } from "../services/inventory-report.js";
 import { escapeLike } from "../services/like.js";
@@ -286,18 +286,23 @@ async function websiteDetail(db: PrismaClient, domain: string) {
   const registered = (await db.domain.findMany({ where: { name: { in: candidates } } })).sort((a, b) => b.name.length - a.name.length)[0];
   const expires = registered?.expiresAt ?? null;
   const temporary = isTemporaryHostname(rows[0]!.domain);
+  const unregisteredSince = !temporary && !expires && registered?.expirySource === "RDAP" ? registered.expiryCheckedAt : null;
   const expiry = temporary
     ? "alamat sementara Hostinger, tidak punya tanggal kedaluwarsa"
     : expires
       ? `${formatDate(expires)} (${formatRelativeDays(expires)})`
-      : "tidak diketahui";
-  const expiryClass = expires && daysUntil(expires) <= 30 ? "urgent" : "";
+      : unregisteredSince
+        ? "tidak terdaftar di registry domain"
+        : "tidak diketahui";
+  const expiryClass = (expires && daysUntil(expires) <= 30) || unregisteredSince ? "urgent" : "";
   const origin =
     expires && registered?.expirySource
       ? html` <span class="muted">· dari ${registered.expirySource === "RDAP" ? "registry domain (RDAP)" : "Hostinger"}${
           registered.expiryCheckedAt ? `, dicek ${formatDate(registered.expiryCheckedAt)}` : ""
         }</span>`
-      : "";
+      : unregisteredSince
+        ? html` <span class="muted">· dicek ${formatDate(unregisteredSince)}</span>`
+        : "";
   return rows.map((w) => {
     const check =
       !temporary && isPlainHostname(w.domain)
@@ -320,8 +325,10 @@ ${field("Dicatat sejak", formatDateTime(w.createdAt))}${field("Diperbarui", form
 
 function jobSummary(result: unknown, error: string | null) {
   if (error) return html`<span class="muted">${error}</span>`;
-  const r = result as { accounts?: number; websites?: number; checked?: number; found?: number } | null;
-  if (r && typeof r.checked === "number") return `${r.checked} domain dicek, ${r.found ?? 0} ditemukan`;
+  const r = result as { accounts?: number; websites?: number; checked?: number; found?: number; notRegistered?: number } | null;
+  if (r && typeof r.checked === "number") {
+    return `${r.checked} domain dicek, ${r.found ?? 0} ditemukan${r.notRegistered ? `, ${r.notRegistered} tidak terdaftar` : ""}`;
+  }
   return r && typeof r.accounts === "number" ? `${r.accounts} paket, ${r.websites ?? 0} website` : "";
 }
 
@@ -331,7 +338,7 @@ async function sinkron(db: PrismaClient, query: Query) {
   const logins = await db.hostingerLogin.findMany({ orderBy: { alias: "asc" }, select: { id: true, alias: true } });
   const aliasById = new Map(logins.map((l) => [l.id, l.alias]));
   const selected = logins.find((l) => l.alias === login);
-  const [summaries, jobs, audit, withoutExpiry] = await Promise.all([
+  const [summaries, jobs, audit, gaps] = await Promise.all([
     loginSummaries(db, selected ? { id: selected.id } : {}),
     db.job.findMany({
       where: selected ? { payload: { path: ["loginId"], equals: selected.id } } : {},
@@ -346,7 +353,7 @@ async function sinkron(db: PrismaClient, query: Query) {
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
-    domainsWithoutExpiry(db),
+    expiryGaps(db),
   ]);
   const jobLogin = (payload: unknown) => aliasById.get(String((payload as { loginId?: unknown } | null)?.loginId)) ?? "tidak diketahui";
   const statusRows = summaries.map(
@@ -381,12 +388,14 @@ ${
 }
 <h2>Tanggal kedaluwarsa domain</h2>
 <p class="lead">${
-    withoutExpiry.length
-      ? `${formatCount(withoutExpiry.length)} website belum punya tanggal kedaluwarsa domain.`
-      : "Semua website sudah punya tanggal kedaluwarsa domain, kecuali alamat sementara Hostinger."
+    gaps.unknown.length
+      ? `${formatCount(gaps.unknown.length)} website belum punya tanggal kedaluwarsa domain.`
+      : "Semua website sudah dicek, kecuali alamat sementara Hostinger."
+  }${
+    gaps.notRegistered.length ? ` ${formatCount(gaps.notRegistered.length)} website memakai domain yang tidak terdaftar di registry.` : ""
   } Tanggal dicari di Hostinger dulu, lalu di registry domain (RDAP) untuk domain di luar akun yang terhubung.</p>
 ${
-  withoutExpiry.length
+  gaps.unknown.length
     ? html`<form method="post" action="/aksi/cek-domain-semua" class="toolbar" data-busy="Mengantrekan pengecekan tanggal kedaluwarsa domain…"><input type="hidden" name="kembali" value="/sinkron"><button type="submit">${icon("sinkron")}<span>Cek semua yang belum diketahui</span></button></form>`
     : ""
 }

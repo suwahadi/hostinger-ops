@@ -381,3 +381,13 @@ test("Sinkron hides per-domain RDAP lookups in the audit list unless asked, like
   expect((await page("/sinkron")).body).not.toContain("rdap-contoh.com");
   expect((await page("/sinkron?api=1")).body).toContain("rdap-contoh.com");
 });
+
+test("a domain the registry says is not registered is flagged on the detail page and counted apart on Sinkron", async () => {
+  const account = await db.hostingAccount.findUniqueOrThrow({ where: { code: "1001" } });
+  await db.website.create({ data: { accountId: account.id, domain: "www.mati-contoh.com" } });
+  await db.domain.create({ data: { name: "mati-contoh.com", expirySource: "RDAP", expiryCheckedAt: new Date("2026-11-13T03:00:00Z") } });
+  const detail = (await page("/website/www.mati-contoh.com")).body;
+  expect(detail).toContain('<dt>Domain expired</dt><dd class="urgent">tidak terdaftar di registry domain <span class="muted">· dicek 13 Nov 2026</span>');
+  const sinkron = (await page("/sinkron")).body;
+  expect(sinkron).toMatch(/\d+ website memakai domain yang tidak terdaftar di registry\./);
+});
