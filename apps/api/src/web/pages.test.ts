@@ -264,6 +264,7 @@ test("the external link is offered only for a plain hostname, never one that poi
   for (const domain of ["x@evil.com", "a/b.com", "a:b.com"]) {
     await db.website.create({ data: { accountId: account.id, domain } });
     expect((await page(`/website/${encodeURIComponent(domain)}`)).body).not.toContain('target="_blank"');
+    expect((await page(`/website?q=${encodeURIComponent(domain)}`)).body).not.toContain('target="_blank"');
   }
 });
 
@@ -332,6 +333,15 @@ test("website detail ends with a Kembali button under the box that goes back, or
 test("the login form locks itself and shows the loader while the password is checked", async () => {
   const form = (await app.inject({ url: "/login", headers: { host } })).body;
   expect(form).toContain('<script src="/assets/app.js" defer></script>');
-  expect(form).toMatch(/<form method="post" action="\/login" class="login-form" data-busy="[^"]+">/);
+  expect(form).toMatch(/<form method="post" action="\/login" class="login-form" data-busy="Memproses…">/);
   expect(form).toMatch(/<div class="busy" role="status" aria-live="polite" hidden>[\s\S]*class="spinner"/);
+  const css = (await app.inject({ url: "/assets/app.css", headers: { host } })).body;
+  expect(css).toContain(".login-page .busy-note { display: none; }");
+});
+
+test("the website list links each plain domain to its site in a new tab, right after the name", async () => {
+  const body = (await page("/website?q=contoh.com")).body;
+  expect(body).toContain(
+    '<a href="/website/contoh.com">contoh.com</a> <a class="external" href="https://contoh.com" target="_blank" rel="noopener noreferrer" aria-label="Buka contoh.com di tab baru"',
+  );
 });

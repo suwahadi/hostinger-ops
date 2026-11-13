@@ -93,8 +93,9 @@ a.page:hover { border-color: var(--pine); color: var(--pine); }
 .page[aria-disabled="true"] { color: var(--field); background: transparent; }
 .page-gap { min-width: 1.5rem; text-align: center; color: var(--muted); }
 .domain-title { display: flex; align-items: center; gap: 0.5rem; overflow-wrap: anywhere; }
-a.external { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; border-radius: 6px; color: var(--pine); }
-a.external:hover { background: var(--pine-soft); }
+a.external { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; color: var(--pine); }
+th a.external { min-width: 1.75rem; min-height: 1.75rem; margin: -0.25rem 0; vertical-align: middle; }
+th a.external .icon { width: 1rem; height: 1rem; }
 .back-row { margin: 1rem 0 0; }
 .back-link { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 44px; padding: 0 1rem 0 0.65rem; border: 1px solid var(--pine); border-radius: 6px; background: var(--surface); color: var(--pine); text-decoration: none; }
 .back-link:hover { background: var(--pine-soft); }
@@ -108,6 +109,7 @@ dl.detail dd { margin: 0; overflow-wrap: anywhere; }
 .login-card h1 { margin-bottom: 1.25rem; text-align: center; }
 .login-form { display: flex; flex-direction: column; gap: 0.5rem; }
 .login-form button { margin-top: 0.75rem; justify-content: center; }
+.login-page .busy-note { display: none; }
 
 .busy { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; padding: 1rem; background: rgba(28, 36, 48, 0.45); }
 .busy[hidden] { display: none; }

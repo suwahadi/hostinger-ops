@@ -21,6 +21,11 @@ function isPlainHostname(domain: string): boolean {
   const url = new URL(`https://${domain}`);
   return url.hostname === domain.toLowerCase() && url.pathname === "/" && !url.username && !url.password;
 }
+
+const externalLink = (domain: string) =>
+  isPlainHostname(domain)
+    ? html` <a class="external" href="https://${domain}" target="_blank" rel="noopener noreferrer" aria-label="Buka ${domain} di tab baru" title="Buka di tab baru">${icon("external")}</a>`
+    : "";
 const URGENT_DAYS = 7;
 const EXPIRING_WITHIN_MS = 30 * 24 * 60 * 60 * 1000;
 const WEBSITE_TYPES = ["WORDPRESS", "LARAVEL", "CUSTOM_PHP", "STATIC", "UNKNOWN"] as const;
@@ -224,7 +229,7 @@ async function website(db: PrismaClient, query: Query) {
     html`<option value="${value}"${value === (selected ?? "") ? html` selected` : ""}>${label}</option>`;
   const body = rows.map(
     (w) =>
-      html`<tr data-row="website"><th scope="row"><a href="/website/${encodeURIComponent(w.domain)}">${w.domain}</a></th><td>${websiteKind(w.websiteType, w.metadata)}</td><td${w.status === "ACTIVE" ? "" : html` class="urgent"`}>${w.status}</td><td>${usernameLink(w.account.username)}</td><td>${w.account.login.alias}</td><td><span class="path">${w.webRoot ?? ""}</span></td></tr>`,
+      html`<tr data-row="website"><th scope="row"><a href="/website/${encodeURIComponent(w.domain)}">${w.domain}</a>${externalLink(w.domain)}</th><td>${websiteKind(w.websiteType, w.metadata)}</td><td${w.status === "ACTIVE" ? "" : html` class="urgent"`}>${w.status}</td><td>${usernameLink(w.account.username)}</td><td>${w.account.login.alias}</td><td><span class="path">${w.webRoot ?? ""}</span></td></tr>`,
   );
   const results =
     total === 0
@@ -293,10 +298,7 @@ async function websiteDetail(db: PrismaClient, domain: string) {
     const provider = providerOf(w.metadata);
     const field = (label: string, value: unknown, className = "") =>
       html`<dt>${label}</dt><dd${className ? html` class="${className}"` : ""}>${value === null || value === undefined || value === "" ? "tidak diketahui" : String(value)}</dd>`;
-    const external = isPlainHostname(w.domain)
-      ? html` <a class="external" href="https://${w.domain}" target="_blank" rel="noopener noreferrer" aria-label="Buka ${w.domain} di tab baru" title="Buka di tab baru">${icon("external")}</a>`
-      : "";
-    return html`<h2 class="domain-title">${w.domain}${external}</h2><dl class="detail">
+    return html`<h2 class="domain-title">${w.domain}${externalLink(w.domain)}</h2><dl class="detail">
 ${field("Status", w.status)}<dt>Jenis</dt><dd>${websiteKind(w.websiteType, w.metadata)}</dd>${field("Jenis di Hostinger", provider.websiteType)}
 ${field("Kode order", w.account.code, "code")}${field("Paket", w.account.planType)}${field("Username", w.account.username, "code")}
 ${field("Login pemilik", w.account.login.alias)}${field("Bisa diakses dari", w.account.access.map((a) => a.login.alias).join(", "))}

@@ -22,7 +22,7 @@ export function loginPage(state: LoginState): string {
   const formHtml =
     state === "setup"
       ? ""
-      : `<form method="post" action="/login" class="login-form" data-busy="Memeriksa password…">
+      : `<form method="post" action="/login" class="login-form" data-busy="Memproses…">
   <label for="password">Password</label>
   <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
   <button type="submit">Masuk</button>
