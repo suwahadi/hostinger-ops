@@ -39,6 +39,8 @@ Status kedua login: `CONNECTED`. Delapan panggilan, delapan baris `HOSTINGER_API
 - `GET /api/dns/v1/zones/{domain}`: respons berupa array record.
 - `GET /api/billing/v1/subscriptions`: tanpa parameter; respons berupa array `{ id, status, expires_at, is_auto_renewed, … }`; hanya memuat langganan yang ditagihkan ke login itu sendiri.
 - Pemakaian disk dan batas jumlah website tidak tersedia untuk shared hosting (hanya untuk Agency Hosting).
+- (Dicek 13 November 2026) `GET /api/domains/v1/portfolio/{domain}/renewal`: `{ domain, status, expires_at, is_grace_period, grace_period_ends_at, is_redemption_period, redemption_period_ends_at, is_renewable }`, hanya untuk domain di akun login itu.
+- (Dicek 13 November 2026) Endpoint "WHOIS" di Hostinger API (`/api/domains/v1/whois…`) hanya mengelola profil kontak pemilik domain; tidak ada pencarian WHOIS atau RDAP untuk domain di luar akun. Untuk itu dipakai RDAP registry (PRD §7.3).
 
 ## Belum terbukti (PRD §3.3, dikerjakan di M4a)
 

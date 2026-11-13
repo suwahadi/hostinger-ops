@@ -1,4 +1,6 @@
 import type { Prisma, PrismaClient } from "@ops/database";
+import { isPlainHostname } from "@ops/shared";
+import { domainsWithoutExpiry, isTemporaryHostname } from "@ops/worker";
 import type { FastifyPluginAsync, FastifyReply } from "fastify";
 import { inventoryTotals, listPlans, type PlanRow, type PlanSort } from "../services/inventory-report.js";
 import { escapeLike } from "../services/like.js";
@@ -11,17 +13,8 @@ import { pager } from "./pager.js";
 import { typeLogo } from "./type-logos.js";
 
 const PAGE_SIZE = 50;
+
 // Only a plain hostname becomes a link; anything else from the provider stays text.
-const HOSTNAME_LABEL = /^(?!-)[a-z0-9-]{1,63}(?<!-)$/i;
-
-function isPlainHostname(domain: string): boolean {
-  const labels = domain.split(".");
-  if (domain.length > 253 || labels.length < 2 || !labels.every((label) => HOSTNAME_LABEL.test(label))) return false;
-  // Belt and braces: the browser's own parser must read the same host back, with nothing after it.
-  const url = new URL(`https://${domain}`);
-  return url.hostname === domain.toLowerCase() && url.pathname === "/" && !url.username && !url.password;
-}
-
 const externalLink = (domain: string) =>
   isPlainHostname(domain)
     ? html` <a class="external" href="https://${domain}" target="_blank" rel="noopener noreferrer" aria-label="Buka ${domain} di tab baru" title="Buka di tab baru">${icon("external")}</a>`
@@ -246,7 +239,7 @@ ${pager(hal, lastPage, linkTo)}`;
   return html`
 <form class="filters" method="get" action="/website">
 <label>Cari domain<input type="search" name="q" value="${q}" placeholder="sebagian nama domain"></label>
-<label>Username paket<input type="search" name="username" value="${username}" placeholder="misal u356639325"></label>
+<label>Username paket<input type="search" name="username" value="${username}" placeholder="misal u123456789"></label>
 <label>Login<select name="login">${loginOptions(aliases, login)}</select></label>
 <label>Jenis<select name="jenis">${option("", "Semua jenis", jenis)}${WEBSITE_TYPES.map((t) => option(t, TYPE_LABELS[t]!, jenis))}</select></label>
 <label>Status<select name="status">${option("", "Semua kecuali UNKNOWN", status)}${WEBSITE_STATUSES.map((s) => option(s, s, status))}</select></label>
@@ -292,9 +285,24 @@ async function websiteDetail(db: PrismaClient, domain: string) {
   const candidates = labels.slice(0, -1).map((_, i) => labels.slice(i).join("."));
   const registered = (await db.domain.findMany({ where: { name: { in: candidates } } })).sort((a, b) => b.name.length - a.name.length)[0];
   const expires = registered?.expiresAt ?? null;
-  const expiry = expires ? `${formatDate(expires)} (${formatRelativeDays(expires)})` : "tidak diketahui";
+  const temporary = isTemporaryHostname(rows[0]!.domain);
+  const expiry = temporary
+    ? "alamat sementara Hostinger, tidak punya tanggal kedaluwarsa"
+    : expires
+      ? `${formatDate(expires)} (${formatRelativeDays(expires)})`
+      : "tidak diketahui";
   const expiryClass = expires && daysUntil(expires) <= 30 ? "urgent" : "";
+  const origin =
+    expires && registered?.expirySource
+      ? html` <span class="muted">· dari ${registered.expirySource === "RDAP" ? "registry domain (RDAP)" : "Hostinger"}${
+          registered.expiryCheckedAt ? `, dicek ${formatDate(registered.expiryCheckedAt)}` : ""
+        }</span>`
+      : "";
   return rows.map((w) => {
+    const check =
+      !temporary && isPlainHostname(w.domain)
+        ? html`<form method="post" action="/aksi/cek-domain" class="inline-form expiry-check" data-busy="Mengecek tanggal kedaluwarsa ${w.domain}…"><input type="hidden" name="domain" value="${w.domain}"><input type="hidden" name="kembali" value="/website/${encodeURIComponent(w.domain)}"><button type="submit" class="secondary small">${icon("sinkron")}<span>Cek</span></button></form>`
+        : "";
     const provider = providerOf(w.metadata);
     const field = (label: string, value: unknown, className = "") =>
       html`<dt>${label}</dt><dd${className ? html` class="${className}"` : ""}>${value === null || value === undefined || value === "" ? "tidak diketahui" : String(value)}</dd>`;
@@ -305,14 +313,15 @@ ${field("Login pemilik", w.account.login.alias)}${field("Bisa diakses dari", w.a
 ${field("Folder web", w.webRoot, "path")}${field("Jenis vhost", provider.vhostType)}${field("Domain induk", provider.parentDomain)}
 ${field("Proyek", w.project ? `${w.project.code} (${w.project.name})` : "belum dipetakan")}
 ${field("Dicatat sejak", formatDateTime(w.createdAt))}${field("Diperbarui", formatDateTime(w.updatedAt))}
-${field("Domain expired", expiry, expiryClass)}
+<dt>Domain expired</dt><dd${expiryClass ? html` class="${expiryClass}"` : ""}>${expiry}${origin}${check}</dd>
 </dl>`;
   });
 }
 
 function jobSummary(result: unknown, error: string | null) {
   if (error) return html`<span class="muted">${error}</span>`;
-  const r = result as { accounts?: number; websites?: number } | null;
+  const r = result as { accounts?: number; websites?: number; checked?: number; found?: number } | null;
+  if (r && typeof r.checked === "number") return `${r.checked} domain dicek, ${r.found ?? 0} ditemukan`;
   return r && typeof r.accounts === "number" ? `${r.accounts} paket, ${r.websites ?? 0} website` : "";
 }
 
@@ -322,7 +331,7 @@ async function sinkron(db: PrismaClient, query: Query) {
   const logins = await db.hostingerLogin.findMany({ orderBy: { alias: "asc" }, select: { id: true, alias: true } });
   const aliasById = new Map(logins.map((l) => [l.id, l.alias]));
   const selected = logins.find((l) => l.alias === login);
-  const [summaries, jobs, audit] = await Promise.all([
+  const [summaries, jobs, audit, withoutExpiry] = await Promise.all([
     loginSummaries(db, selected ? { id: selected.id } : {}),
     db.job.findMany({
       where: selected ? { payload: { path: ["loginId"], equals: selected.id } } : {},
@@ -330,10 +339,14 @@ async function sinkron(db: PrismaClient, query: Query) {
       take: 30,
     }),
     db.auditLog.findMany({
-      where: { ...(showApi ? {} : { action: { not: "HOSTINGER_API_CALL" } }), ...(selected ? { resourceId: selected.alias } : {}) },
+      where: {
+        ...(showApi ? {} : { action: { notIn: ["HOSTINGER_API_CALL", "RDAP_LOOKUP"] } }),
+        ...(selected ? { resourceId: selected.alias } : {}),
+      },
       orderBy: { createdAt: "desc" },
       take: 50,
     }),
+    domainsWithoutExpiry(db),
   ]);
   const jobLogin = (payload: unknown) => aliasById.get(String((payload as { loginId?: unknown } | null)?.loginId)) ?? "tidak diketahui";
   const statusRows = summaries.map(
@@ -344,7 +357,7 @@ async function sinkron(db: PrismaClient, query: Query) {
   );
   const jobRows = jobs.map(
     (j) =>
-      html`<tr><td>${j.kind}</td><td>${jobLogin(j.payload)}</td><td${j.status === "FAILED" ? html` class="urgent"` : ""}>${j.status}</td><td class="num">${j.attempts}</td><td>${formatDateTime(j.startedAt, "belum mulai")}</td><td>${formatDateTime(
+      html`<tr><td>${j.kind}</td><td>${j.kind === "check-domain-expiry" ? "semua" : jobLogin(j.payload)}</td><td${j.status === "FAILED" ? html` class="urgent"` : ""}>${j.status}</td><td class="num">${j.attempts}</td><td>${formatDateTime(j.startedAt, "belum mulai")}</td><td>${formatDateTime(
         j.finishedAt,
         "belum selesai",
       )}</td><td>${jobSummary(j.result, j.error)}</td></tr>`,
@@ -366,6 +379,17 @@ ${
     ? table(html`<th scope="col">Login</th><th scope="col">Sinkron terakhir</th><th scope="col">Job terakhir</th><th scope="col">Error</th>`, statusRows, "Status sinkron")
     : html`<p class="empty">Belum ada login.</p>`
 }
+<h2>Tanggal kedaluwarsa domain</h2>
+<p class="lead">${
+    withoutExpiry.length
+      ? `${formatCount(withoutExpiry.length)} website belum punya tanggal kedaluwarsa domain.`
+      : "Semua website sudah punya tanggal kedaluwarsa domain, kecuali alamat sementara Hostinger."
+  } Tanggal dicari di Hostinger dulu, lalu di registry domain (RDAP) untuk domain di luar akun yang terhubung.</p>
+${
+  withoutExpiry.length
+    ? html`<form method="post" action="/aksi/cek-domain-semua" class="toolbar" data-busy="Mengantrekan pengecekan tanggal kedaluwarsa domain…"><input type="hidden" name="kembali" value="/sinkron"><button type="submit">${icon("sinkron")}<span>Cek semua yang belum diketahui</span></button></form>`
+    : ""
+}
 <h2>30 job terakhir</h2>
 ${
   jobRows.length
@@ -377,9 +401,9 @@ ${
     : html`<p class="empty">Belum ada job. Sinkronisasi pertama akan muncul di sini.</p>`
 }
 <h2>50 catatan audit terakhir</h2>
-<p class="lead">${showApi ? "Termasuk setiap panggilan ke Hostinger." : "Panggilan per request ke Hostinger disembunyikan."} <a href="/sinkron?${apiToggle}">${
-    showApi ? "Sembunyikan panggilan API Hostinger" : "Tampilkan panggilan API Hostinger"
-  }</a></p>
+<p class="lead">${
+    showApi ? "Termasuk setiap panggilan ke Hostinger dan registry domain." : "Panggilan per request ke Hostinger dan registry domain disembunyikan."
+  } <a href="/sinkron?${apiToggle}">${showApi ? "Sembunyikan panggilan API" : "Tampilkan panggilan API"}</a></p>
 ${
   auditRows.length
     ? table(html`<th scope="col">Waktu</th><th scope="col">Pelaku</th><th scope="col">Aksi</th><th scope="col">Sumber</th><th scope="col">Hasil</th>`, auditRows, "Audit")

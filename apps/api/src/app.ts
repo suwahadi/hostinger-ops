@@ -1,6 +1,7 @@
 import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
 import type { PrismaClient } from "@ops/database";
 import { createRateLimiter, HOSTINGER_RATE_LIMIT, type RateLimiter, type Sleep } from "@ops/hostinger-adapter";
+import { checkDomainExpiry, createRdap, type Rdap } from "@ops/worker";
 import { fastify, type FastifyInstance } from "fastify";
 import { inventoryRoutes } from "./routes/inventory.js";
 import { syncRoutes } from "./routes/sync.js";
@@ -24,6 +25,7 @@ export type AppDeps = {
   sleep?: Sleep;
   sessions?: SessionStore;
   throttle?: LoginThrottle;
+  rdap?: Rdap;
 };
 
 const sha256 = (value: string) => createHash("sha256").update(value).digest();
@@ -41,6 +43,7 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   const hostingerLimiter = limiter ?? createRateLimiter(HOSTINGER_RATE_LIMIT);
   const sessions = deps.sessions ?? createSessionStore();
   const throttle = deps.throttle ?? createLoginThrottle();
+  const rdap = deps.rdap ?? createRdap({ fetch });
 
   app.addContentTypeParser("application/x-www-form-urlencoded", { parseAs: "string", bodyLimit: 16 * 1024 }, (_request, body, done) =>
     done(null, Object.fromEntries(new URLSearchParams(body as string))),
@@ -111,7 +114,9 @@ export function buildApp(deps: AppDeps): FastifyInstance {
   app.register(webPages(db));
   const webVerify = (alias: string, requestId: string) =>
     verifyLogin({ db, masterKey, limiter: hostingerLimiter, fetch, sleep, requestId, actor: "WEB_HUMAN" }, alias);
-  app.register(webActions({ db, verify: webVerify }));
+  const checkExpiry = (domain: string, requestId: string) =>
+    checkDomainExpiry({ db, masterKey, limiter: hostingerLimiter, fetch, sleep, rdap, requestId, actor: "WEB_HUMAN" }, domain);
+  app.register(webActions({ db, verify: webVerify, checkExpiry }));
   app.get("/assets/app.css", async (_request, reply) => reply.type("text/css; charset=utf-8").send(APP_CSS));
   app.get("/assets/app.js", async (_request, reply) => reply.type("text/javascript; charset=utf-8").send(APP_JS));
   app.get("/favicon.ico", async (_request, reply) => reply.code(204).send());

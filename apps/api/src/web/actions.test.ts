@@ -90,3 +90,52 @@ test("a return path that normalizes to another site never leaves the dashboard",
     expect(new URL(location, `http://${host}`).origin).toBe(`http://${host}`);
   }
 });
+
+const registry = {
+  lookup: vi.fn(async (name: string) =>
+    name === "luar.com"
+      ? ({ kind: "found", expiresAt: new Date("2027-03-12T00:00:00Z"), server: "rdap.test" } as const)
+      : ({ kind: "not_found", server: "rdap.test" } as const),
+  ),
+};
+const appWithRegistry = buildApp({
+  db,
+  apiKey: "k".repeat(40),
+  masterKey,
+  fetch: hostingerFetch,
+  limiter: { acquire: async () => {} },
+  sleep: async () => {},
+  rdap: registry,
+});
+afterAll(() => appWithRegistry.close());
+const registryCookie = String(
+  (await appWithRegistry.inject({ method: "POST", url: "/login", headers: form, payload: new URLSearchParams({ password }).toString() })).headers["set-cookie"],
+).split(";")[0]!;
+const postWithRegistry = (url: string, fields: Record<string, string>) =>
+  appWithRegistry.inject({ method: "POST", url, headers: { ...form, cookie: registryCookie }, payload: new URLSearchParams(fields).toString() });
+
+test("Cek on a website detail looks the date up, stores it, returns to the page with the date, audited as WEB_HUMAN", async () => {
+  const res = await postWithRegistry("/aksi/cek-domain", { domain: "luar.com", kembali: "/website/luar.com" });
+  expect(res.statusCode).toBe(303);
+  expect(String(res.headers.location)).toMatch(/^\/website\/luar\.com\?pesan=/);
+  expect(messageOf(res.headers.location)).toContain("luar.com kedaluwarsa 12 Mar 2027");
+  expect(messageOf(res.headers.location)).toContain("registry domain (RDAP)");
+  expect(await db.domain.findUniqueOrThrow({ where: { name: "luar.com" } })).toMatchObject({ expirySource: "RDAP" });
+  expect(await db.auditLog.count({ where: { action: "DOMAIN_EXPIRY_CHECK", actor: "WEB_HUMAN", resourceId: "luar.com" } })).toBe(1);
+});
+
+test("Cek explains temporary addresses, odd names and dates found nowhere in plain words", async () => {
+  const say = async (domain: string) => messageOf((await postWithRegistry("/aksi/cek-domain", { domain, kembali: "/website" })).headers.location);
+  expect(await say("coba.hostingersite.com")).toContain("alamat sementara Hostinger");
+  expect(await say("x@evil.com")).toContain("bukan nama domain yang bisa dicek");
+  expect(await say("tidak-ketemu.com")).toContain("tidak ditemukan di Hostinger maupun di registry domain");
+});
+
+test("Cek semua queues one bulk job; a second press does not add another", async () => {
+  const first = await post("/aksi/cek-domain-semua", { kembali: "/sinkron" });
+  expect(first.statusCode).toBe(303);
+  expect(messageOf(first.headers.location)).toContain("Pengecekan tanggal kedaluwarsa domain diantrekan");
+  expect(messageOf((await post("/aksi/cek-domain-semua", { kembali: "/sinkron" })).headers.location)).toContain("sudah dalam antrean");
+  expect(await db.job.count({ where: { kind: "check-domain-expiry" } })).toBe(1);
+  expect(await db.auditLog.count({ where: { action: "DOMAIN_EXPIRY_REQUEST", actor: "WEB_HUMAN" } })).toBe(2);
+});

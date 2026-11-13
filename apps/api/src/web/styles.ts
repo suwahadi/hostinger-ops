@@ -86,6 +86,9 @@ td:has(> .actions) { width: 1%; white-space: nowrap; }
 td:has(> .actions) .actions { flex-wrap: nowrap; }
 table[aria-label="Login Hostinger"] :is(td:nth-child(3), td:nth-child(4)) { white-space: nowrap; }
 button.secondary { background: var(--surface); color: var(--pine); }
+button.small { min-height: 2rem; padding: 0 0.6rem; font-size: 0.85rem; gap: 0.35rem; }
+button.small .icon { width: 1rem; height: 1rem; }
+.expiry-check { margin-left: 0.5rem; }
 button.link-button { display: flex; align-items: center; gap: 0.65rem; background: none; border: 0; color: var(--muted); padding: 0 0.75rem; text-align: left; width: 100%; border-radius: 6px; }
 button.link-button:hover { background: var(--paper); }
 button.link-button:hover { color: var(--ink); }

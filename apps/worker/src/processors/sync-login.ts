@@ -221,10 +221,13 @@ export async function syncLoginInventory(deps: SyncDeps, job: JobRow): Promise<S
         data: { status: "UNKNOWN" },
       });
       for (const entry of registered) {
+        // Hostinger leaves expires_at empty for some domains; a date found earlier by another check must survive that.
         const data = {
           loginId: login.id,
           status: entry.status ?? null,
-          expiresAt: entry.expires_at ? new Date(entry.expires_at) : null,
+          ...(entry.expires_at
+            ? { expiresAt: new Date(entry.expires_at), expirySource: "HOSTINGER", expiryCheckedAt: now }
+            : {}),
         };
         const name = entry.domain.toLowerCase();
         await tx.domain.upsert({ where: { name }, create: { name, ...data }, update: data });

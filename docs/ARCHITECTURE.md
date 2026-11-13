@@ -4,16 +4,17 @@
 Claude Code ──stdio──▶ apps/mcp-server ──HTTP + x-api-key──▶ apps/api (+ worker) ──Prisma──▶ PostgreSQL 17 (Docker)
                         8 tool               127.0.0.1:3000        │                       127.0.0.1:${OPS_PG_PORT}
 Browser pemilik ──HTTP + cookie sesi─────────▶ (halaman web) ──────┤
-                                                                   └──HTTPS + Bearer──▶ developers.hostinger.com
+                                                                   ├──HTTPS + Bearer──▶ developers.hostinger.com
+                                                                   └──HTTPS, nama domain saja──▶ RDAP registry (via bootstrap IANA)
 Terminal pemilik ──ops:secret:set / ops:login:add / ops:ui:password──▶ apps/api/dist/cli ──▶ PostgreSQL
 ```
 
 **Dua pintu di satu port.** Hook `onRequest` di `apps/api/src/app.ts` memilih pintu dari route yang dicocokkan router (`request.routeOptions.url`), bukan dari URL mentah:
 - `/v1/*` hanya terbuka dengan `x-api-key` (jalur Claude); cookie diabaikan.
 - Halaman web hanya terbuka dengan sesi browser; `x-api-key` diabaikan.
-- `/health`, `/login`, `/assets/app.css`, dan `/favicon.ico` publik.
+- `/health`, `/login`, `/assets/*` (CSS dan skrip kecil), dan `/favicon.ico` publik.
 
-**Tampilan web** (`apps/api/src/web/`): Ringkasan, Paket, Website (+ detail), dan Sinkron & Audit, dirender di server tanpa JavaScript. Ada dua tombol yang hanya membaca dari Hostinger: Sinkronkan dan Uji koneksi. Angka di Ringkasan dan `/v1/capacity` memakai satu aturan hitung di `services/inventory-report.ts`: paket dan website `UNKNOWN` tidak dihitung, dan website dihitung dari barisnya.
+**Tampilan web** (`apps/api/src/web/`): Ringkasan, Paket, Website (+ detail), dan Sinkron & Audit, dirender di server; satu skrip kecil hanya untuk loader dan tombol Kembali. Tombol yang hanya membaca: Sinkronkan, Uji koneksi, Cek tanggal kedaluwarsa (per website, langsung), dan Cek semua yang belum diketahui (job `check-domain-expiry` di worker). Pengecek kedaluwarsa ada di `apps/worker/src/processors/domain-expiry.ts`: Hostinger dulu, lalu RDAP (`apps/worker/src/rdap.ts`). Angka di Ringkasan dan `/v1/capacity` memakai satu aturan hitung di `services/inventory-report.ts`: paket dan website `UNKNOWN` tidak dihitung, dan website dihitung dari barisnya.
 
 ## Membuka tampilan web
 

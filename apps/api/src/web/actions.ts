@@ -1,7 +1,9 @@
 import type { PrismaClient } from "@ops/database";
+import { enqueueJob, type ExpiryCheck } from "@ops/worker";
 import type { FastifyPluginAsync } from "fastify";
 import { requestSync } from "../services/sync-request.js";
 import type { VerifyResult } from "../services/verify-login.js";
+import { formatDate } from "./format.js";
 import { safeReturnPath } from "./guard.js";
 
 type Form = Record<string, string> | undefined;
@@ -14,11 +16,46 @@ function withMessage(path: string, message: string): string {
   return `${url.pathname}${url.search}`;
 }
 
+function expiryMessage(domain: string, check: ExpiryCheck): string {
+  switch (check.outcome) {
+    case "found":
+      return `${check.domain} kedaluwarsa ${formatDate(check.expiresAt)} (sumber: ${check.source === "RDAP" ? "registry domain (RDAP)" : "Hostinger"}).`;
+    case "temporary":
+      return `${domain} adalah alamat sementara Hostinger dan tidak punya tanggal kedaluwarsa.`;
+    case "invalid":
+      return `${domain || "(kosong)"} bukan nama domain yang bisa dicek.`;
+    case "not_found":
+      return `Tanggal kedaluwarsa ${domain} tidak ditemukan di Hostinger maupun di registry domain.`;
+    case "error":
+      return `Pengecekan ${domain} gagal (${check.reason}). Coba lagi beberapa saat lagi.`;
+  }
+}
+
 export function webActions(deps: {
   db: PrismaClient;
   verify: (alias: string, requestId: string) => Promise<VerifyResult | null>;
+  checkExpiry: (domain: string, requestId: string) => Promise<ExpiryCheck>;
 }): FastifyPluginAsync {
   return async (app) => {
+    app.post<{ Body: Form }>("/aksi/cek-domain", async (request, reply) => {
+      const domain = field(request.body, "domain").toLowerCase();
+      const back = safeReturnPath(request.body?.kembali);
+      const check = await deps.checkExpiry(domain, request.id);
+      return reply.redirect(withMessage(back, expiryMessage(domain, check)), 303);
+    });
+
+    app.post<{ Body: Form }>("/aksi/cek-domain-semua", async (request, reply) => {
+      const back = safeReturnPath(request.body?.kembali);
+      const job = await enqueueJob(deps.db, { kind: "check-domain-expiry", payload: {}, dedupeKey: "check-domain-expiry" });
+      await deps.db.auditLog.create({
+        data: { requestId: request.id, actor: "WEB_HUMAN", action: "DOMAIN_EXPIRY_REQUEST", resource: "domain", result: job.created ? "queued" : "already_queued" },
+      });
+      const message = job.created
+        ? "Pengecekan tanggal kedaluwarsa domain diantrekan. Satu domain per detik, jadi bisa makan beberapa menit; hasilnya muncul di daftar job di bawah."
+        : "Pengecekan tanggal kedaluwarsa domain sudah dalam antrean.";
+      return reply.redirect(withMessage(back, message), 303);
+    });
+
     app.post<{ Body: Form }>("/aksi/sinkron", async (request, reply) => {
       const login = field(request.body, "login");
       const back = safeReturnPath(request.body?.kembali);

@@ -345,3 +345,39 @@ test("the website list links each plain domain to its site in a new tab, right a
     '<a href="/website/contoh.com">contoh.com</a> <a class="external" href="https://contoh.com" target="_blank" rel="noopener noreferrer" aria-label="Buka contoh.com di tab baru"',
   );
 });
+
+test("website detail says where the expiry date came from, when it was checked, and offers a Cek button", async () => {
+  await db.domain.update({ where: { name: "contoh.com" }, data: { expirySource: "RDAP", expiryCheckedAt: new Date("2026-11-13T03:00:00Z") } });
+  const body = (await page("/website/contoh.com")).body;
+  const tail = body.slice(body.lastIndexOf("<dt>Domain expired</dt>"));
+  expect(tail).toContain("dari registry domain (RDAP), dicek 13 Nov 2026");
+  expect(tail).toContain(
+    '<form method="post" action="/aksi/cek-domain" class="inline-form expiry-check" data-busy="Mengecek tanggal kedaluwarsa contoh.com…"><input type="hidden" name="domain" value="contoh.com"><input type="hidden" name="kembali" value="/website/contoh.com">',
+  );
+});
+
+test("a temporary Hostinger address says it has no expiry date and offers no Cek button", async () => {
+  const account = await db.hostingAccount.findUniqueOrThrow({ where: { code: "1001" } });
+  await db.website.create({ data: { accountId: account.id, domain: "coba.hostingersite.com" } });
+  const body = (await page("/website/coba.hostingersite.com")).body;
+  expect(body).toContain("<dt>Domain expired</dt><dd>alamat sementara Hostinger, tidak punya tanggal kedaluwarsa</dd>");
+  expect(body).not.toContain('action="/aksi/cek-domain"');
+});
+
+test("Sinkron counts websites without an expiry date, offers one button to check them all, and summarises the bulk job", async () => {
+  await db.job.create({
+    data: { kind: "check-domain-expiry", payload: {}, status: "DONE", result: { pending: 12, checked: 10, found: 9, notFound: 1, errors: 0 } },
+  });
+  const body = (await page("/sinkron")).body;
+  expect(body).toContain("<h2>Tanggal kedaluwarsa domain</h2>");
+  expect(body).toMatch(/\d+ website belum punya tanggal kedaluwarsa domain\./);
+  expect(body).toMatch(/<form method="post" action="\/aksi\/cek-domain-semua" class="toolbar" data-busy="[^"]+">/);
+  expect(body).toContain("<td>check-domain-expiry</td><td>semua</td>");
+  expect(body).toContain("10 domain dicek, 9 ditemukan");
+});
+
+test("Sinkron hides per-domain RDAP lookups in the audit list unless asked, like Hostinger API calls", async () => {
+  await db.auditLog.create({ data: { requestId: "r-rdap", actor: "WORKER", action: "RDAP_LOOKUP", resource: "domain", resourceId: "rdap-contoh.com", result: "found" } });
+  expect((await page("/sinkron")).body).not.toContain("rdap-contoh.com");
+  expect((await page("/sinkron?api=1")).body).toContain("rdap-contoh.com");
+});

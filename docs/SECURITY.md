@@ -11,6 +11,7 @@
 - Token Hostinger masuk hanya lewat prompt tersembunyi `ops:secret:set` / `ops:login:add`. Keduanya menolak stdin yang bukan terminal interaktif (di-pipe, atau `!` di Claude Code), dan menolak nilai berisi spasi atau karakter tak terlihat.
 - Token didekripsi hanya di proses API saat verifikasi. Audit per panggilan Hostinger hanya menyimpan path, status, nomor percobaan, dan durasi. Error dari `fetch` tidak pernah diteruskan karena pesannya bisa memuat detail request.
 - Uji koneksi berhenti setelah satu probe kena rate limit, supaya tidak memperparah pembatasan (PRD §3.2: pelanggaran berulang bisa memblokir IP).
+- **RDAP (PRD §7.3):** satu-satunya layanan luar selain Hostinger. Yang dikirim hanya nama domain, setelah lolos `isPlainHostname` dan di-encode sebelum masuk URL. Alamat server diambil dari bootstrap IANA dan hanya yang `https://` dipakai. Pengecekan massal dibatasi satu domain per detik. Audit: `RDAP_LOOKUP` per permintaan dan `DOMAIN_EXPIRY_CHECK` per domain.
 
 ## Tampilan web
 
@@ -23,10 +24,10 @@
 - **Pemisahan dari jalur Claude:** pintu dipilih dari route yang dicocokkan router, sehingga URL berkode seperti `/%76%31/logins` tetap memerlukan `x-api-key`.
 - **DNS rebinding:** rute web menolak header `Host` selain `127.0.0.1` dan `localhost` (421).
 - **CSRF:** setiap `POST` web wajib `Sec-Fetch-Site: same-origin`, atau `Origin` yang persis `http://<Host>`, port termasuk. Situs lokal lain (misal Laragon di `localhost:80`) dianggap "same-site" oleh browser, jadi `SameSite=Strict` saja tidak cukup.
-- **Header:** CSP `default-src 'self'` tanpa skrip, `frame-ancestors 'none'`, `Cache-Control: no-store`, `Referrer-Policy: same-origin`, `nosniff`.
+- **Header:** CSP `default-src 'self'`, jadi skrip hanya `/assets/app.js` milik sendiri (loader, kunci tombol, tombol Kembali; tanpa skrip semua form tetap jalan) dan tidak ada skrip inline. Juga `frame-ancestors 'none'`, `Cache-Control: no-store`, `Referrer-Policy: same-origin`, `nosniff`.
 - **Escape:** semua nilai dari Hostinger dan dari pengguna di-escape oleh `html\`\``. Pencarian domain meng-escape `%` dan `_`, karena `contains` Prisma tidak melakukannya.
 - **Pengalihan:** `kembali` hanya menerima path internal (`/…`, bukan `//` atau `/\`).
-- **Audit:** login web (`UI_LOGIN`), pembuatan password (`UI_PASSWORD_SET`), permintaan sinkron (`SYNC_REQUEST`), dan uji koneksi dicatat dengan pelaku `WEB_HUMAN` atau `CLI_HUMAN`, terpisah dari `CLAUDE_MCP`.
+- **Audit:** login web (`UI_LOGIN`), pembuatan password (`UI_PASSWORD_SET`), permintaan sinkron (`SYNC_REQUEST`), uji koneksi, cek tanggal kedaluwarsa (`DOMAIN_EXPIRY_CHECK`), dan permintaan cek massal (`DOMAIN_EXPIRY_REQUEST`) dicatat dengan pelaku `WEB_HUMAN` atau `CLI_HUMAN`, terpisah dari `CLAUDE_MCP`.
 
 **Risiko yang diterima:** HTTP lokal tanpa TLS (hanya `127.0.0.1`), dan program lain milik pengguna yang sama di PC ini bisa mencoba menebak password, dibatasi oleh pembatas percobaan.
 

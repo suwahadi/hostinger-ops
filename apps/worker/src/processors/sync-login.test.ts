@@ -201,10 +201,33 @@ test("stores domain status and expiry from the portfolio", async () => {
     job(),
   );
   expect(result.domains).toBe(1);
-  expect(await db.domain.findUniqueOrThrow({ where: { name: "ganda.com" } })).toMatchObject({
+  const stored = await db.domain.findUniqueOrThrow({ where: { name: "ganda.com" } });
+  expect(stored).toMatchObject({ loginId: sumber.id, status: "active", expiresAt: new Date("2027-03-12T00:00:00Z"), expirySource: "HOSTINGER" });
+  expect(stored.expiryCheckedAt).toBeInstanceOf(Date);
+});
+
+test("a portfolio entry without a date keeps the expiry found earlier, e.g. by the renewal check or RDAP", async () => {
+  await db.domain.upsert({
+    where: { name: "tanpa-tanggal.com" },
+    create: { name: "tanpa-tanggal.com", expiresAt: new Date("2028-01-01T00:00:00Z"), expirySource: "RDAP" },
+    update: { expiresAt: new Date("2028-01-01T00:00:00Z"), expirySource: "RDAP" },
+  });
+  await syncLoginInventory(
+    deps(
+      hostinger({
+        orders: [{ id: 102, status: "active", plan: { name: "Business" } }],
+        subscriptions: [],
+        websites: [{ domain: "ganda.com", order_id: 102, is_enabled: true }],
+        portfolio: [{ id: 3, domain: "tanpa-tanggal.com", type: "domain", status: "active" }],
+      }),
+    ),
+    job(),
+  );
+  expect(await db.domain.findUniqueOrThrow({ where: { name: "tanpa-tanggal.com" } })).toMatchObject({
     loginId: sumber.id,
     status: "active",
-    expiresAt: new Date("2027-03-12T00:00:00Z"),
+    expiresAt: new Date("2028-01-01T00:00:00Z"),
+    expirySource: "RDAP",
   });
 });
 
