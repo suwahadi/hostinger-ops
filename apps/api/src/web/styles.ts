@@ -108,7 +108,7 @@ th a.external .icon { width: 1rem; height: 1rem; }
 .back-link { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 44px; padding: 0 1rem 0 0.65rem; border: 1px solid var(--pine); border-radius: 6px; background: var(--surface); color: var(--pine); text-decoration: none; }
 .back-link:hover { background: var(--pine-soft); }
 
-dl.detail { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 0.4rem 1.25rem; margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.25rem; }
+dl.detail { display: grid; grid-template-columns: max-content minmax(0, 1fr); align-items: baseline; gap: 0.4rem 1.25rem; margin: 0; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 1rem 1.25rem; }
 dl.detail dt { color: var(--muted); }
 dl.detail dd { margin: 0; overflow-wrap: anywhere; }
 
