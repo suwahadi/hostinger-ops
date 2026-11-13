@@ -391,3 +391,29 @@ test("a domain the registry says is not registered is flagged on the detail page
   const sinkron = (await page("/sinkron")).body;
   expect(sinkron).toMatch(/\d+ website memakai domain yang tidak terdaftar di registry\./);
 });
+
+test("website detail says how the type was recognised from the files", async () => {
+  const account = await db.hostingAccount.findUniqueOrThrow({ where: { code: "1001" } });
+  await db.website.create({
+    data: {
+      accountId: account.id,
+      domain: "dikenali-contoh.com",
+      websiteType: "LARAVEL",
+      metadata: { provider: { websiteType: "other" }, detection: { type: "LARAVEL", evidence: "index.php milik Laravel (LARAVEL_START)", checkedAt: "2026-11-13T04:00:00.000Z" } },
+    },
+  });
+  const body = (await page("/website/dikenali-contoh.com")).body;
+  expect(body).toMatch(/<dt>Jenis<\/dt><dd><svg class="type-logo"[^>]*aria-label="Laravel"[\s\S]*?<\/svg> <span class="muted">· dikenali dari index\.php milik Laravel \(LARAVEL_START\), 13 Nov 2026<\/span><\/dd>/);
+});
+
+test("Sinkron counts websites whose type is not recognised yet and summarises the detection job", async () => {
+  await db.job.create({
+    data: { kind: "detect-website-types", payload: {}, status: "DONE", result: { checked: 5, laravel: 3, wordpress: 0, php: 1, static: 1, unknown: 0, errors: 0 } },
+  });
+  const body = (await page("/sinkron")).body;
+  expect(body).toContain("<h2>Jenis website</h2>");
+  expect(body).toMatch(/\d+ website belum dikenali jenisnya\./);
+  expect(body).toMatch(/<form method="post" action="\/aksi\/kenali-jenis" class="toolbar" data-busy="[^"]+">/);
+  expect(body).toContain("<td>detect-website-types</td><td>semua</td>");
+  expect(body).toContain("5 website dicek: 3 Laravel, 1 PHP lain, 1 statis");
+});

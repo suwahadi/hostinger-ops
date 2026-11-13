@@ -14,7 +14,7 @@ Terminal pemilik ──ops:secret:set / ops:login:add / ops:ui:password──▶
 - Halaman web hanya terbuka dengan sesi browser; `x-api-key` diabaikan.
 - `/health`, `/login`, `/assets/*` (CSS dan skrip kecil), dan `/favicon.ico` publik.
 
-**Tampilan web** (`apps/api/src/web/`): Ringkasan, Paket, Website (+ detail), dan Sinkron & Audit, dirender di server; satu skrip kecil hanya untuk loader dan tombol Kembali. Tombol yang hanya membaca: Sinkronkan, Uji koneksi, Cek tanggal kedaluwarsa (per website, langsung), dan Cek semua yang belum diketahui (job `check-domain-expiry` di worker). Pengecek kedaluwarsa ada di `apps/worker/src/processors/domain-expiry.ts`: Hostinger dulu, lalu RDAP (`apps/worker/src/rdap.ts`). Angka di Ringkasan dan `/v1/capacity` memakai satu aturan hitung di `services/inventory-report.ts`: paket dan website `UNKNOWN` tidak dihitung, dan website dihitung dari barisnya.
+**Tampilan web** (`apps/api/src/web/`): Ringkasan, Paket, Website (+ detail), dan Sinkron & Audit, dirender di server; satu skrip kecil hanya untuk loader dan tombol Kembali. Tombol yang hanya membaca: Sinkronkan, Uji koneksi, Cek tanggal kedaluwarsa (per website, langsung), Cek semua yang belum diketahui (job `check-domain-expiry` di worker), dan Kenali jenis website (job `detect-website-types`: daftar file folder web dan `index.php` lewat API Hostinger, di `apps/worker/src/processors/website-type.ts`). Pengecek kedaluwarsa ada di `apps/worker/src/processors/domain-expiry.ts`: Hostinger dulu, lalu RDAP (`apps/worker/src/rdap.ts`). Angka di Ringkasan dan `/v1/capacity` memakai satu aturan hitung di `services/inventory-report.ts`: paket dan website `UNKNOWN` tidak dihitung, dan website dihitung dari barisnya.
 
 ## Membuka tampilan web
 

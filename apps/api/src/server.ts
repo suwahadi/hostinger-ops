@@ -1,6 +1,6 @@
 import { createDb } from "@ops/database";
 import { createRateLimiter, HOSTINGER_RATE_LIMIT } from "@ops/hostinger-adapter";
-import { checkDomainExpiries, createRdap, startWorker, syncLoginInventory } from "@ops/worker";
+import { checkDomainExpiries, createRdap, detectWebsiteTypes, startWorker, syncLoginInventory } from "@ops/worker";
 import { buildApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { loadRootEnv } from "./env-file.js";
@@ -20,6 +20,7 @@ const worker = startWorker({
   handlers: {
     "sync-login": (job) => syncLoginInventory({ db, masterKey: config.masterKey, limiter }, job),
     "check-domain-expiry": (job) => checkDomainExpiries({ db, masterKey: config.masterKey, limiter, rdap }, job),
+    "detect-website-types": (job) => detectWebsiteTypes({ db, masterKey: config.masterKey, limiter }, job),
   },
   log: (message) => app.log.info(message),
 });

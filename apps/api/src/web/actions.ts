@@ -58,6 +58,18 @@ export function webActions(deps: {
       return reply.redirect(withMessage(back, message), 303);
     });
 
+    app.post<{ Body: Form }>("/aksi/kenali-jenis", async (request, reply) => {
+      const back = safeReturnPath(request.body?.kembali);
+      const job = await enqueueJob(deps.db, { kind: "detect-website-types", payload: {}, dedupeKey: "detect-website-types" });
+      await deps.db.auditLog.create({
+        data: { requestId: request.id, actor: "WEB_HUMAN", action: "WEBSITE_TYPE_REQUEST", resource: "website", result: job.created ? "queued" : "already_queued" },
+      });
+      const message = job.created
+        ? "Pengenalan jenis website diantrekan. Folder web tiap website yang belum dikenali dibaca lewat API Hostinger; hasilnya muncul di daftar job di bawah."
+        : "Pengenalan jenis website sudah dalam antrean.";
+      return reply.redirect(withMessage(back, message), 303);
+    });
+
     app.post<{ Body: Form }>("/aksi/sinkron", async (request, reply) => {
       const login = field(request.body, "login");
       const back = safeReturnPath(request.body?.kembali);

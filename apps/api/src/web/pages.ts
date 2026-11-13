@@ -34,6 +34,18 @@ const providerOf = (metadata: unknown) =>
   ((metadata as { provider?: Record<string, unknown> } | null)?.provider ?? {}) as Record<string, unknown>;
 const websiteKind = (websiteType: string, metadata: unknown) =>
   typeLogo(websiteType, providerOf(metadata).websiteType) ?? html`<span class="muted">${TYPE_LABELS[websiteType] ?? websiteType}</span>`;
+
+function detectionNote(metadata: unknown) {
+  const detection = ((metadata as { detection?: Record<string, unknown> } | null)?.detection ?? {}) as Record<string, unknown>;
+  const checkedAt = typeof detection.checkedAt === "string" ? new Date(detection.checkedAt) : null;
+  const when = checkedAt && !Number.isNaN(checkedAt.getTime()) ? formatDate(checkedAt) : "";
+  if (detection.type === "UNKNOWN") {
+    const why = typeof detection.evidence === "string" ? detection.evidence : typeof detection.error === "string" ? detection.error : "";
+    return html` <span class="muted">· dicek${when ? ` ${when}` : ""}${why ? `: ${why}` : ""}</span>`;
+  }
+  if (typeof detection.evidence !== "string") return "";
+  return html` <span class="muted">· dikenali dari ${detection.evidence}${when ? `, ${when}` : ""}</span>`;
+}
 const ACTOR_LABELS: Record<string, string> = { CLAUDE_MCP: "Claude", CLI_HUMAN: "Terminal", WORKER: "Worker", WEB_HUMAN: "Web" };
 
 type Query = Record<string, string | undefined>;
@@ -312,7 +324,7 @@ async function websiteDetail(db: PrismaClient, domain: string) {
     const field = (label: string, value: unknown, className = "") =>
       html`<dt>${label}</dt><dd${className ? html` class="${className}"` : ""}>${value === null || value === undefined || value === "" ? "tidak diketahui" : String(value)}</dd>`;
     return html`<h2 class="domain-title">${w.domain}${externalLink(w.domain)}</h2><dl class="detail">
-${field("Status", w.status)}<dt>Jenis</dt><dd>${websiteKind(w.websiteType, w.metadata)}</dd>${field("Jenis di Hostinger", provider.websiteType)}
+${field("Status", w.status)}<dt>Jenis</dt><dd>${websiteKind(w.websiteType, w.metadata)}${detectionNote(w.metadata)}</dd>${field("Jenis di Hostinger", provider.websiteType)}
 ${field("Kode order", w.account.code, "code")}${field("Paket", w.account.planType)}${field("Username", w.account.username, "code")}
 ${field("Login pemilik", w.account.login.alias)}${field("Bisa diakses dari", w.account.access.map((a) => a.login.alias).join(", "))}
 ${field("Folder web", w.webRoot, "path")}${field("Jenis vhost", provider.vhostType)}${field("Domain induk", provider.parentDomain)}
@@ -325,7 +337,26 @@ ${field("Dicatat sejak", formatDateTime(w.createdAt))}${field("Diperbarui", form
 
 function jobSummary(result: unknown, error: string | null) {
   if (error) return html`<span class="muted">${error}</span>`;
-  const r = result as { accounts?: number; websites?: number; checked?: number; found?: number; notRegistered?: number } | null;
+  const r = result as {
+    accounts?: number;
+    websites?: number;
+    checked?: number;
+    found?: number;
+    notRegistered?: number;
+    laravel?: number;
+    php?: number;
+    static?: number;
+    wordpress?: number;
+    unknown?: number;
+    errors?: number;
+  } | null;
+  if (r && typeof r.laravel === "number") {
+    const parts = [`${r.laravel} Laravel`, `${r.php ?? 0} PHP lain`, `${r.static ?? 0} statis`];
+    if (r.wordpress) parts.push(`${r.wordpress} WordPress`);
+    if (r.unknown) parts.push(`${r.unknown} tetap belum dikenali`);
+    if (r.errors) parts.push(`${r.errors} gagal dibaca`);
+    return `${r.checked ?? 0} website dicek: ${parts.join(", ")}`;
+  }
   if (r && typeof r.checked === "number") {
     return `${r.checked} domain dicek, ${r.found ?? 0} ditemukan${r.notRegistered ? `, ${r.notRegistered} tidak terdaftar` : ""}`;
   }
@@ -338,7 +369,7 @@ async function sinkron(db: PrismaClient, query: Query) {
   const logins = await db.hostingerLogin.findMany({ orderBy: { alias: "asc" }, select: { id: true, alias: true } });
   const aliasById = new Map(logins.map((l) => [l.id, l.alias]));
   const selected = logins.find((l) => l.alias === login);
-  const [summaries, jobs, audit, gaps] = await Promise.all([
+  const [summaries, jobs, audit, gaps, unrecognised] = await Promise.all([
     loginSummaries(db, selected ? { id: selected.id } : {}),
     db.job.findMany({
       where: selected ? { payload: { path: ["loginId"], equals: selected.id } } : {},
@@ -354,8 +385,14 @@ async function sinkron(db: PrismaClient, query: Query) {
       take: 50,
     }),
     expiryGaps(db),
+    db.website
+      .findMany({ where: { websiteType: "UNKNOWN", status: { not: "UNKNOWN" } }, select: { metadata: true } })
+      .then((rows) => rows.filter((r) => providerOf(r.metadata).websiteType !== "nodejs").length),
   ]);
-  const jobLogin = (payload: unknown) => aliasById.get(String((payload as { loginId?: unknown } | null)?.loginId)) ?? "tidak diketahui";
+  const jobLogin = (payload: unknown) => {
+    const loginId = (payload as { loginId?: unknown } | null)?.loginId;
+    return loginId === undefined ? "semua" : (aliasById.get(String(loginId)) ?? "tidak diketahui");
+  };
   const statusRows = summaries.map(
     (s) =>
       html`<tr><th scope="row">${s.alias}</th><td>${formatDateTime(s.lastSyncedAt ? new Date(s.lastSyncedAt) : null)}</td><td${
@@ -364,7 +401,7 @@ async function sinkron(db: PrismaClient, query: Query) {
   );
   const jobRows = jobs.map(
     (j) =>
-      html`<tr><td>${j.kind}</td><td>${j.kind === "check-domain-expiry" ? "semua" : jobLogin(j.payload)}</td><td${j.status === "FAILED" ? html` class="urgent"` : ""}>${j.status}</td><td class="num">${j.attempts}</td><td>${formatDateTime(j.startedAt, "belum mulai")}</td><td>${formatDateTime(
+      html`<tr><td>${j.kind}</td><td>${jobLogin(j.payload)}</td><td${j.status === "FAILED" ? html` class="urgent"` : ""}>${j.status}</td><td class="num">${j.attempts}</td><td>${formatDateTime(j.startedAt, "belum mulai")}</td><td>${formatDateTime(
         j.finishedAt,
         "belum selesai",
       )}</td><td>${jobSummary(j.result, j.error)}</td></tr>`,
@@ -385,6 +422,17 @@ ${
   statusRows.length
     ? table(html`<th scope="col">Login</th><th scope="col">Sinkron terakhir</th><th scope="col">Job terakhir</th><th scope="col">Error</th>`, statusRows, "Status sinkron")
     : html`<p class="empty">Belum ada login.</p>`
+}
+<h2>Jenis website</h2>
+<p class="lead">${
+    unrecognised
+      ? `${formatCount(unrecognised)} website belum dikenali jenisnya.`
+      : "Semua website sudah dikenali jenisnya atau sudah dicek."
+  } Hostinger hanya mengenali WordPress dan Node.js; selain itu dikenali dari isi folder web (misalnya index.php milik Laravel), dibaca lewat API Hostinger.</p>
+${
+  unrecognised
+    ? html`<form method="post" action="/aksi/kenali-jenis" class="toolbar" data-busy="Mengantrekan pengenalan jenis website…"><input type="hidden" name="kembali" value="/sinkron"><button type="submit">${icon("sinkron")}<span>Kenali jenis website</span></button></form>`
+    : ""
 }
 <h2>Tanggal kedaluwarsa domain</h2>
 <p class="lead">${

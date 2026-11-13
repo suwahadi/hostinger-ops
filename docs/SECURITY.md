@@ -12,6 +12,7 @@
 - Token didekripsi hanya di proses API saat verifikasi. Audit per panggilan Hostinger hanya menyimpan path, status, nomor percobaan, dan durasi. Error dari `fetch` tidak pernah diteruskan karena pesannya bisa memuat detail request.
 - Uji koneksi berhenti setelah satu probe kena rate limit, supaya tidak memperparah pembatasan (PRD §3.2: pelanggaran berulang bisa memblokir IP).
 - **RDAP (PRD §7.3):** satu-satunya layanan luar selain Hostinger. Yang dikirim hanya nama domain, setelah lolos `isPlainHostname` dan di-encode sebelum masuk URL. Alamat server diambil dari bootstrap IANA dan hanya yang `https://` dipakai. Pengecekan massal dibatasi satu domain per detik. Audit: `RDAP_LOOKUP` per permintaan dan `DOMAIN_EXPIRY_CHECK` per domain.
+- **Pengenalan jenis website:** membaca daftar file folder web dan isi `index.php` lewat API Hostinger (hanya baca). Isi file tidak disimpan; yang disimpan hanya jenis dan bukti singkat (misal "index.php milik Laravel (LARAVEL_START)"). Audit: `WEBSITE_TYPE_DETECTION` per website.
 
 ## Tampilan web
 

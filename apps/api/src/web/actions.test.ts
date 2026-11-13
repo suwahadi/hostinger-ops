@@ -139,3 +139,12 @@ test("Cek semua queues one bulk job; a second press does not add another", async
   expect(await db.job.count({ where: { kind: "check-domain-expiry" } })).toBe(1);
   expect(await db.auditLog.count({ where: { action: "DOMAIN_EXPIRY_REQUEST", actor: "WEB_HUMAN" } })).toBe(2);
 });
+
+test("Kenali jenis website queues one detection job; a second press does not add another", async () => {
+  const first = await post("/aksi/kenali-jenis", { kembali: "/sinkron" });
+  expect(first.statusCode).toBe(303);
+  expect(messageOf(first.headers.location)).toContain("Pengenalan jenis website diantrekan");
+  expect(messageOf((await post("/aksi/kenali-jenis", { kembali: "/sinkron" })).headers.location)).toContain("sudah dalam antrean");
+  expect(await db.job.count({ where: { kind: "detect-website-types" } })).toBe(1);
+  expect(await db.auditLog.count({ where: { action: "WEBSITE_TYPE_REQUEST", actor: "WEB_HUMAN" } })).toBe(2);
+});

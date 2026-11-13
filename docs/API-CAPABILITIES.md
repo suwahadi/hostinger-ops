@@ -40,6 +40,8 @@ Status kedua login: `CONNECTED`. Delapan panggilan, delapan baris `HOSTINGER_API
 - `GET /api/billing/v1/subscriptions`: tanpa parameter; respons berupa array `{ id, status, expires_at, is_auto_renewed, … }`; hanya memuat langganan yang ditagihkan ke login itu sendiri.
 - Pemakaian disk dan batas jumlah website tidak tersedia untuk shared hosting (hanya untuk Agency Hosting).
 - (Dicek 13 November 2026) `GET /api/domains/v1/portfolio/{domain}/renewal`: `{ domain, status, expires_at, is_grace_period, grace_period_ends_at, is_redemption_period, redemption_period_ends_at, is_renewable }`, hanya untuk domain di akun login itu.
+- (Dicek 13 November 2026) `website_type` di `GET /api/hosting/v1/websites` hanya `wordpress`, `builder`, `horizons`, `nodejs`, `other`; Laravel dan PHP lain masuk `other`.
+- (Terbukti 13 November 2026, 7 website contoh Laravel milik pemilik, semuanya 200) `GET /api/hosting/v1/accounts/{username}/domains/{domain}/files?max_depth=1&max_items=500` mendaftar isi folder web; `…/files/content?path=index.php&max_lines=80` membaca isi file teks. Hostinger sendiri menolak symlink, file besar, dan file berisi rahasia. Pada ketujuh contoh, folder web berisi isi `public/` Laravel (aplikasinya di subfolder) dan `index.php` memuat `LARAVEL_START`.
 - (Dicek 13 November 2026) Endpoint "WHOIS" di Hostinger API (`/api/domains/v1/whois…`) hanya mengelola profil kontak pemilik domain; tidak ada pencarian WHOIS atau RDAP untuk domain di luar akun. Untuk itu dipakai RDAP registry (PRD §7.3).
 
 ## Belum terbukti (PRD §3.3, dikerjakan di M4a)
