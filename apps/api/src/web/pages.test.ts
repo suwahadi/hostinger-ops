@@ -392,7 +392,7 @@ test("a domain the registry says is not registered is flagged on the detail page
   expect(sinkron).toMatch(/\d+ website memakai domain yang tidak terdaftar di registry\./);
 });
 
-test("website detail says how the type was recognised from the files", async () => {
+test("website detail shows only the type logo, without the detection evidence", async () => {
   const account = await db.hostingAccount.findUniqueOrThrow({ where: { code: "1001" } });
   await db.website.create({
     data: {
@@ -403,7 +403,8 @@ test("website detail says how the type was recognised from the files", async () 
     },
   });
   const body = (await page("/website/dikenali-contoh.com")).body;
-  expect(body).toMatch(/<dt>Jenis<\/dt><dd><svg class="type-logo"[^>]*aria-label="Laravel"[\s\S]*?<\/svg> <span class="muted">· dikenali dari index\.php milik Laravel \(LARAVEL_START\), 13 Nov 2026<\/span><\/dd>/);
+  expect(body).toMatch(/<dt>Jenis<\/dt><dd><svg class="type-logo"[^>]*aria-label="Laravel"[\s\S]*?<\/svg><\/dd>/);
+  expect(body).not.toContain("dikenali dari");
 });
 
 test("Sinkron counts websites whose type is not recognised yet and summarises the detection job", async () => {
@@ -416,4 +417,19 @@ test("Sinkron counts websites whose type is not recognised yet and summarises th
   expect(body).toMatch(/<form method="post" action="\/aksi\/kenali-jenis" class="toolbar" data-busy="[^"]+">/);
   expect(body).toContain("<td>detect-website-types</td><td>semua</td>");
   expect(body).toContain("5 website dicek: 3 Laravel, 1 PHP lain, 1 statis");
+});
+
+test("an excluded website is left out of the list, search and its plan's list, yet its detail page still opens", async () => {
+  const account = await db.hostingAccount.findUniqueOrThrow({ where: { code: "1001" } });
+  await db.website.create({ data: { accountId: account.id, domain: "dikecualikan-contoh.com", excludedAt: new Date("2026-11-13T05:00:00Z") } });
+  expect((await page("/website?q=dikecualikan")).body).not.toContain(">dikecualikan-contoh.com</a>");
+  expect((await page("/website?username=u111")).body).not.toContain(">dikecualikan-contoh.com</a>");
+  const list = (await page("/website")).body;
+  expect(list).toContain('1 website dikecualikan dari daftar dan pencarian. <a href="/website?dikecualikan=1">Lihat</a>');
+  expect((await page("/website?dikecualikan=1")).body).toContain(">dikecualikan-contoh.com</a>");
+  const detail = await page("/website/dikecualikan-contoh.com");
+  expect(detail.statusCode).toBe(200);
+  expect(detail.body).toContain("Website ini dikecualikan dari daftar dan pencarian sejak 13 Nov 2026.");
+  expect(detail.body).toMatch(/<form method="post" action="\/aksi\/kecualikan" class="inline-form"><input type="hidden" name="domain" value="dikecualikan-contoh.com"><input type="hidden" name="mode" value="tampilkan">/);
+  expect((await page("/website/contoh.com")).body).toContain('<input type="hidden" name="mode" value="kecualikan">');
 });

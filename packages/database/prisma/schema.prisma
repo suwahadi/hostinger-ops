@@ -122,6 +122,8 @@ model Website {
   phpVersion       String?
   metadata         Json?
   status           String            @default("ACTIVE")
+  /// Set by the owner to hide the website from the dashboard's lists and search; sync never touches it.
+  excludedAt       DateTime?
   projectId        String?
   project          Project?          @relation(fields: [projectId], references: [id], onDelete: SetNull)
   createdAt        DateTime          @default(now())

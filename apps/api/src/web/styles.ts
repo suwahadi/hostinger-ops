@@ -104,7 +104,7 @@ a.page:hover { border-color: var(--pine); color: var(--pine); }
 a.external { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; color: var(--pine); }
 th a.external { min-width: 1.75rem; min-height: 1.75rem; margin: -0.25rem 0; vertical-align: middle; }
 th a.external .icon { width: 1rem; height: 1rem; }
-.back-row { margin: 1rem 0 0; }
+.back-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; margin: 1rem 0 0; }
 .back-link { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 44px; padding: 0 1rem 0 0.65rem; border: 1px solid var(--pine); border-radius: 6px; background: var(--surface); color: var(--pine); text-decoration: none; }
 .back-link:hover { background: var(--pine-soft); }
 

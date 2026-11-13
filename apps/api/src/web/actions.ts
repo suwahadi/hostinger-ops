@@ -3,6 +3,7 @@ import { enqueueJob, type ExpiryCheck } from "@ops/worker";
 import type { FastifyPluginAsync } from "fastify";
 import { requestSync } from "../services/sync-request.js";
 import type { VerifyResult } from "../services/verify-login.js";
+import { setWebsiteExcluded } from "../services/website-exclusion.js";
 import { formatDate } from "./format.js";
 import { safeReturnPath } from "./guard.js";
 
@@ -55,6 +56,21 @@ export function webActions(deps: {
       const message = job.created
         ? "Pengecekan tanggal kedaluwarsa domain diantrekan. Satu domain per detik, jadi bisa makan beberapa menit; hasilnya muncul di daftar job di bawah."
         : "Pengecekan tanggal kedaluwarsa domain sudah dalam antrean.";
+      return reply.redirect(withMessage(back, message), 303);
+    });
+
+    app.post<{ Body: Form }>("/aksi/kecualikan", async (request, reply) => {
+      const domain = field(request.body, "domain").toLowerCase();
+      const mode = field(request.body, "mode");
+      const back = safeReturnPath(request.body?.kembali);
+      if (mode !== "kecualikan" && mode !== "tampilkan") return reply.redirect(withMessage(back, "Aksi tidak dikenal."), 303);
+      const count = await setWebsiteExcluded(deps.db, { domain, excluded: mode === "kecualikan", actor: "WEB_HUMAN", requestId: request.id });
+      const message =
+        count === 0
+          ? `Website ${domain || "(kosong)"} tidak ditemukan.`
+          : mode === "kecualikan"
+            ? `${domain} dikecualikan dari daftar dan pencarian. Halamannya tetap bisa dibuka lewat tautan "Lihat" di halaman Website.`
+            : `${domain} tampil lagi di daftar.`;
       return reply.redirect(withMessage(back, message), 303);
     });
 

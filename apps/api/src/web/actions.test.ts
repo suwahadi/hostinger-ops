@@ -148,3 +148,18 @@ test("Kenali jenis website queues one detection job; a second press does not add
   expect(await db.job.count({ where: { kind: "detect-website-types" } })).toBe(1);
   expect(await db.auditLog.count({ where: { action: "WEBSITE_TYPE_REQUEST", actor: "WEB_HUMAN" } })).toBe(2);
 });
+
+test("Kecualikan hides every row of a domain and Tampilkan brings it back, both audited as WEB_HUMAN", async () => {
+  const account = await db.hostingAccount.create({ data: { code: "7001", loginId: (await db.hostingerLogin.findUniqueOrThrow({ where: { alias: "sumber" } })).id } });
+  await db.website.create({ data: { accountId: account.id, domain: "sembunyi-contoh.com" } });
+  const hide = await post("/aksi/kecualikan", { domain: "Sembunyi-Contoh.com", mode: "kecualikan", kembali: "/website/sembunyi-contoh.com" });
+  expect(hide.statusCode).toBe(303);
+  expect(String(hide.headers.location)).toMatch(/^\/website\/sembunyi-contoh\.com\?pesan=/);
+  expect(messageOf(hide.headers.location)).toContain("sembunyi-contoh.com dikecualikan dari daftar dan pencarian");
+  expect((await db.website.findFirstOrThrow({ where: { domain: "sembunyi-contoh.com" } })).excludedAt).toBeInstanceOf(Date);
+  const show = await post("/aksi/kecualikan", { domain: "sembunyi-contoh.com", mode: "tampilkan", kembali: "/website/sembunyi-contoh.com" });
+  expect(messageOf(show.headers.location)).toContain("sembunyi-contoh.com tampil lagi di daftar");
+  expect((await db.website.findFirstOrThrow({ where: { domain: "sembunyi-contoh.com" } })).excludedAt).toBeNull();
+  expect(await db.auditLog.count({ where: { actor: "WEB_HUMAN", action: { in: ["WEBSITE_EXCLUDED", "WEBSITE_INCLUDED"] } } })).toBe(2);
+  expect(messageOf((await post("/aksi/kecualikan", { domain: "tidak-ada.com", mode: "kecualikan" })).headers.location)).toContain("tidak ditemukan");
+});
