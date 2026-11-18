@@ -1,0 +1,61 @@
+{
+  "version": 2,
+  "skills": {
+    "antislop": {
+      "source": "miqdadbadjuber/anti-slop",
+      "commit": "57b92d497a67c226b060b71c6f263c8631f37da4",
+      "sourceType": "github",
+      "skillPath": "skills/antislop/SKILL.md",
+      "computedHash": "5db1f692cb9722e0f642e9a378d8c44b011a102726efb41bf0003c8c37f0a137",
+      "installMode": "copy"
+    },
+    "antislop-code": {
+      "source": "miqdadbadjuber/anti-slop",
+      "commit": "57b92d497a67c226b060b71c6f263c8631f37da4",
+      "sourceType": "github",
+      "skillPath": "skills/antislop-code/SKILL.md",
+      "computedHash": "4a2d3d64037896a3ab4e2c3df026e7a59fa92458617c65a2e0ed7fc3c456266a",
+      "installMode": "copy"
+    },
+    "antislop-copywriting": {
+      "source": "miqdadbadjuber/anti-slop",
+      "commit": "57b92d497a67c226b060b71c6f263c8631f37da4",
+      "sourceType": "github",
+      "skillPath": "skills/antislop-copywriting/SKILL.md",
+      "computedHash": "57a00dcdb416ea8ed4b2a388ef9580f120afbc3d9bf8bfa8cd4e6796443c9a22",
+      "installMode": "copy"
+    },
+    "antislop-human": {
+      "source": "miqdadbadjuber/anti-slop",
+      "commit": "57b92d497a67c226b060b71c6f263c8631f37da4",
+      "sourceType": "github",
+      "skillPath": "skills/antislop-human/SKILL.md",
+      "computedHash": "9567348cbbabe47c4946ab95147c6990829e7a57897d38b61dfb0d08971e7f53",
+      "installMode": "copy"
+    },
+    "antislop-layoutmobile": {
+      "source": "miqdadbadjuber/anti-slop",
+      "commit": "57b92d497a67c226b060b71c6f263c8631f37da4",
+      "sourceType": "github",
+      "skillPath": "skills/antislop-layoutmobile/SKILL.md",
+      "computedHash": "c3f54f8a065e9c371a9c5bb5076b41fc06bbeaeaca125f35459a4b8b17be34f2",
+      "installMode": "copy"
+    },
+    "antislop-ui": {
+      "source": "miqdadbadjuber/anti-slop",
+      "commit": "57b92d497a67c226b060b71c6f263c8631f37da4",
+      "sourceType": "github",
+      "skillPath": "skills/antislop-ui/SKILL.md",
+      "computedHash": "09c3efcee47866061a1609e298068941eb1d35e73eea95ae67ea2453be3951a9",
+      "installMode": "copy"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "commit": "e4bb5d960d87126ff3b3a8af1a104b7db67560ba",
+      "sourceType": "github",
+      "skillPath": "skills/frontend-design/SKILL.md",
+      "computedHash": "83485963700bcf11d5bf78118facb301676b69d918fee2e45a95e7f1a2840f6c",
+      "installMode": "copy"
+    }
+  }
+}
