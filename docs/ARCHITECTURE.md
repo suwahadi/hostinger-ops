@@ -67,3 +67,15 @@ corepack pnpm dev:api       # biarkan berjalan selama memakai Claude Code
 ```
 
 `corepack pnpm` bisa diganti `pnpm` bila pnpm terpasang global. Test (`pnpm test`) memakai database terpisah `hostinger_ops_test` di container yang sama dan mengosongkannya setiap kali dijalankan.
+
+## Cloud Agent
+
+Cursor Cloud Agent memakai `.cursor/environment.json` (config as code). `install` menjalankan `.cursor/install.sh`: PostgreSQL 17 dari repositori apt resmi PostgreSQL bila belum ada, lalu `corepack pnpm install --frozen-lockfile` dan `corepack pnpm build`. `start` menjalankan `.cursor/start.sh`: menyalakan klaster PostgreSQL, menyiapkan database `hostinger_ops` dan `hostinger_ops_test`, menerapkan migrasi Prisma ke keduanya, lalu menjalankan API di `127.0.0.1:3000` bila port itu masih kosong.
+
+Image bawaan cloud tidak menyertakan Docker. Di cloud, database-nya PostgreSQL 17 yang terpasang di VM, pada `127.0.0.1:5432`. Di PC Windows pemilik, PostgreSQL tetap lewat `corepack pnpm infra:up` (Docker, port `OPS_PG_PORT`).
+
+Nama variabel yang dibaca aplikasi: `NODE_ENV`, `POSTGRES_PASSWORD`, `OPS_PG_PORT`, `DATABASE_URL`, `HOSTING_OPS_API_KEY`, `SECRETS_MASTER_KEY`, `API_PORT`. Nilai sungguhan harus berasal dari secret terenkripsi Cursor atau dari variabel lingkungan proses, bukan dari file yang masuk repositori. Bila `POSTGRES_PASSWORD`, `HOSTING_OPS_API_KEY`, dan `SECRETS_MASTER_KEY` sudah ada di lingkungan dan bukan placeholder `.env.example`, `start` menyalinnya ke `.env` lokal (`DATABASE_URL` ikut disalin bila ada, atau disusun dari password dan port). Bila tidak ada, `start` membuat nilai acak sekali pakai di `.env` (sudah di-gitignore) supaya pemeriksaan dan API bisa jalan. Nilai acak itu bukan token Hostinger. Jangan menjalankan `ops:login:add` atau sinkronisasi ke Hostinger dari cloud.
+
+`POSTGRES_PASSWORD` di `.env` harus sama dengan password di dalam `DATABASE_URL`. `SECRETS_MASTER_KEY` adalah 64 karakter hex. `HOSTING_OPS_API_KEY` minimal 32 karakter.
+
+Selama API berjalan, `corepack pnpm install` bisa gagal di `prisma generate` karena berkas mesin Prisma terkunci. Matikan API dulu bila skema berubah.
